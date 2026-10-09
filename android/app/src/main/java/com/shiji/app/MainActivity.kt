@@ -202,6 +202,8 @@ fun ShijiApp() {
     var pendingSource by remember { mutableStateOf("diy") }
     var pendingNote by remember { mutableStateOf("") }
     var pendingJob by remember { mutableStateOf<String?>(null) }
+    // 同一格已经有记录时，先把已有的那条抱出来，等用户选追加还是覆盖
+    var conflictExisting by remember { mutableStateOf<Meal?>(null) }
     var pendingItems by remember { mutableStateOf<List<RecognizedItem>>(emptyList()) }
     // 0 无 / 1 核对食材名称
     var recordStage by remember { mutableStateOf(0) }
@@ -352,9 +354,8 @@ fun ShijiApp() {
     }
 
     /** 用户核对完名称就提交，不等 AI：入库后热量由服务端自动回填。 */
-    fun submitPending(items: List<RecognizedItem>, note: String) {
-        pendingNote = note
-        val inputs = items.filter { it.food_name.isNotBlank() }.map {
+    fun buildInputs(items: List<RecognizedItem>): List<MealItemInput> =
+        items.filter { it.food_name.isNotBlank() }.map {
             MealItemInput(
                 food_name = it.food_name.trim(),
                 dish_name = it.dish_name,
@@ -363,34 +364,57 @@ fun ShijiApp() {
                 match_status = it.match_status
             )
         }
-        if (inputs.isEmpty()) {
+
+    /** 真正提交。mode=append 时服务端会把这次的内容并进这一格已有的记录。 */
+    fun doSubmit(mode: String) = run {
+        val jobId = pendingJob
+        val body = MealCreate(
+            meal_slot = pendingSlot,
+            meal_date = pendingMealDate,
+            source = pendingSource,
+            note = pendingNote,
+            eaten_at = pendingEatenAt,
+            items = buildInputs(pendingItems),
+            mode = mode
+        )
+        val meal = if (jobId != null) ApiClient.api.confirmRecognition(jobId, body)
+        else ApiClient.api.createMeal(body)
+        meals = ApiClient.api.listMeals().items
+        conflictExisting = null
+        message = when {
+            meal.appended == true && meal.status == "estimating" ->
+                "已并进这一餐，原来的都还在，新加的正在估算热量…"
+            meal.appended == true -> "已并进这一餐，原来的都还在"
+            meal.replaced == true && meal.status == "estimating" ->
+                "这一餐之前记过，已覆盖，热量重新估算中…"
+            meal.replaced == true -> "这一餐之前记过，已覆盖"
+            meal.status == "estimating" -> "已提交，热量正在估算…"
+            else -> "已记录这一餐"
+        }
+        clearPending()
+        if (meal.status == "estimating") watchEstimation(meal.id)
+    }
+
+    fun submitPending(items: List<RecognizedItem>, note: String) {
+        pendingNote = note
+        pendingItems = items
+        if (buildInputs(items).isEmpty()) {
             message = "至少要留一样食材"
             return
         }
-        val jobId = pendingJob
-        run {
-            val body = MealCreate(
-                meal_slot = pendingSlot,
-                meal_date = pendingMealDate,
-                source = pendingSource,
-                note = pendingNote,
-                eaten_at = pendingEatenAt,
-                items = inputs
-            )
-            val meal = if (jobId != null) ApiClient.api.confirmRecognition(jobId, body)
-            else ApiClient.api.createMeal(body)
-            meals = ApiClient.api.listMeals().items
-            // 一天四餐、每餐只留一条：同一格已有记录时是覆盖更新
-            val replaced = meal.replaced == true
-            message = when {
-                replaced && meal.status == "estimating" -> "这一餐之前记过，已更新，热量重新估算中…"
-                replaced -> "这一餐之前记过，已更新"
-                meal.status == "estimating" -> "已提交，热量正在估算…"
-                else -> "已记录这一餐"
-            }
-            clearPending()
-            if (meal.status == "estimating") watchEstimation(meal.id)
+
+        // 一天四餐、每餐只留一条：这一格已经有记录时先问用户，不要默默盖掉
+        val targetDate = pendingMealDate
+            ?: pendingEatenAt?.let { localDateKey(it) }
+            ?: localDateFor(0)
+        val existing = meals.firstOrNull {
+            localDateKey(it.eaten_at) == targetDate && it.meal_slot == pendingSlot
         }
+        if (existing != null) {
+            conflictExisting = existing
+            return
+        }
+        doSubmit("replace")
     }
 
     // 冷启动先试本机快速登录，别先闪一下登录页
@@ -408,9 +432,14 @@ fun ShijiApp() {
         enabled = showPrivacy || userCard != null || showRecordDialog ||
             editingMeal != null || recordStage != 0 || showProfile ||
             squareRoute !is SquareRoute.Home
+            || conflictExisting != null
     ) {
         when {
             showPrivacy -> showPrivacy = false
+            conflictExisting != null -> {
+                conflictExisting = null
+                clearPending()
+            }
             userCard != null -> userCard = null
             showRecordDialog -> showRecordDialog = false
             editingMeal != null -> editingMeal = null
@@ -826,6 +855,54 @@ fun ShijiApp() {
         )
     }
 
+    // 这一格已经有记录：让用户选「并进去」还是「覆盖掉」，不要默默替换
+    conflictExisting?.let { old ->
+        AlertDialog(
+            onDismissRequest = {
+                // 取消就是这次不记了
+                conflictExisting = null
+                clearPending()
+            },
+            modifier = Modifier.border(1.dp, Color(0x40FFFFFF), RoundedCornerShape(20.dp)),
+            shape = RoundedCornerShape(20.dp),
+            containerColor = DialogGlass,
+            title = { Text("这一餐已经记过了") },
+            text = {
+                Column(
+                    Modifier
+                        .heightIn(max = 260.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        "${slotLabel(old.meal_slot)}已经有记录了（${friendlyDateTime(old.eaten_at)}）",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        old.items.joinToString("、") { it.food_name }.ifBlank { "（没有食材）" },
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "这次记的可以并进去（原来的不会丢），也可以直接覆盖掉。",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { doSubmit("append") }) { Text("并进去") }
+            },
+            dismissButton = {
+                TextButton(onClick = { doSubmit("replace") }) {
+                    Text("覆盖掉", color = MaterialTheme.colorScheme.outline)
+                }
+            }
+        )
+    }
+
     if (showRecordDialog) {
         RecordDialog(
             initialDaysAgo = recordDaysAgo,
@@ -1053,6 +1130,12 @@ fun LoginScreen(
             label = { Text("密码（首次注册时设置）") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
+        )
+        Text(
+            "第一次用这个号必须设密码（8 位以上），以后能用它直接登录；老用户留空即可。",
+            fontSize = 11.sp,
+            color = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.padding(top = 6.dp)
         )
         Spacer(Modifier.height(20.dp))
         Button(

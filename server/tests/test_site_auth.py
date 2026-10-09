@@ -109,13 +109,52 @@ def main() -> int:
         check("验证码错误被拦下", resp.status_code == 400 and "验证码" in resp.text, resp.text)
 
         # 3) 正确验证码 → 自动建号并映射 site_user_id → 发我们的令牌
+        # 3) 正确验证码但没给密码：首次注册必须拦住，不允许出现无密码账号
         resp = client.post("/api/v1/auth/sms/verify", json={"phone": PHONE, "code": "123456"})
+        check(
+            "首次注册不给密码被拦下",
+            resp.status_code == 400 and "设置密码" in resp.text,
+            resp.text,
+        )
+        check(
+            "被拦下时没有偷偷建号",
+            db.query_one("SELECT id FROM users WHERE phone=?", (PHONE,)) is None,
+            "",
+        )
+
+        # 4) 带上密码再注册 → 自动建号并映射 site_user_id → 发我们的令牌
+        resp = client.post(
+            "/api/v1/auth/sms/verify",
+            json={"phone": PHONE, "code": "123456", "password": "app-pass-123"},
+        )
         body = resp.json()
         token = body.get("access_token")
-        check("验证码登录拿到令牌", resp.status_code == 200 and bool(token) and bool(body.get("device_token")), body)
+        check(
+            "带密码注册拿到令牌",
+            resp.status_code == 200 and bool(token) and bool(body.get("device_token")),
+            body,
+        )
 
         row = db.query_one("SELECT * FROM users WHERE phone=?", (PHONE,))
         check("本地用户映射到站点 id", bool(row) and row.get("site_user_id") == SITE_USER_ID, row)
+        check("密码在本地留了一份", bool(row and row.get("password_hash")), str(row))
+
+        # 5) 用注册时设的密码能直接登录（走本地那份，不依赖站点）
+        resp = client.post(
+            "/api/v1/auth/login/password",
+            json={"phone": PHONE, "password": "app-pass-123"},
+        )
+        check(
+            "能用注册时设的密码登录",
+            resp.status_code == 200 and bool(resp.json().get("access_token")),
+            resp.text,
+        )
+
+        resp = client.post(
+            "/api/v1/auth/login/password",
+            json={"phone": PHONE, "password": "app-pass-999"},
+        )
+        check("本地密码不对时不会误放行", resp.status_code in (401, 400), resp.text)
 
         # 4) 用令牌访问自己的档案（说明登录态真的可用）
         resp = client.get("/api/v1/profile", headers={"Authorization": f"Bearer {token}"})

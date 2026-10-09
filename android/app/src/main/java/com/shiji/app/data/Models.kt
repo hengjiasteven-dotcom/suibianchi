@@ -118,7 +118,9 @@ data class Meal(
     val photos: List<MealPhoto> = emptyList(),
     val total_energy_kcal: Double = 0.0,
     /** 服务端发现这一餐当天已有记录时回传 true：是覆盖更新，不是新增。 */
-    val replaced: Boolean? = null
+    val replaced: Boolean? = null,
+    /** 同一格已有记录时选了「追加」：内容并进了原记录，不是覆盖。 */
+    val appended: Boolean? = null
 )
 
 data class MealListResponse(val items: List<Meal> = emptyList())
@@ -129,7 +131,9 @@ data class MealCreate(
     val eaten_at: String? = null,
     val source: String = "unknown",
     val note: String = "",
-    val items: List<MealItemInput> = emptyList()
+    val items: List<MealItemInput> = emptyList(),
+    /** 同一格已经有记录时：replace 整体替换 / append 并到原记录上 */
+    val mode: String = "replace"
 )
 
 data class MealPatch(

@@ -221,6 +221,43 @@ def main():
     r = client.get(f"/api/v1/shares/{share['share_id']}")
     check("分享可访问", r.status_code == 200)
 
+    print("\n--- 同一餐再记一次：追加 vs 覆盖 ---")
+    stamp = "2026-10-05T18:30:00+00:00"
+
+    def confirm_meal(text, mode=None, note=None):
+        r = client.post(
+            "/api/v1/recognition",
+            json={"text": text, "meal_slot": "dinner", "source": "diy"},
+            headers=headers,
+        )
+        job = r.json()
+        body = {"meal_slot": "dinner", "eaten_at": stamp}
+        if mode:
+            body["mode"] = mode
+        if note is not None:
+            body["note"] = note
+        r = client.post(
+            f"/api/v1/recognition/{job['job_id']}/confirm", json=body, headers=headers
+        )
+        return r.json()
+
+    first = confirm_meal("米饭 青菜", note="第一轮")
+    first_id = first["id"]
+    check("先建一条晚餐记录", first_id > 0 and len(first["items"]) >= 2, f"id={first_id}")
+
+    merged = confirm_meal("紫菜蛋花汤", mode="append")
+    names = [i["food_name"] for i in merged["items"]]
+    check("追加不会丢掉原来的食材", "米饭" in names and "青菜" in names, str(names))
+    check("追加把新内容接上了", len(names) >= 3, str(names))
+    check("追加标记正确", merged.get("appended") is True, str(merged.get("appended")))
+    check("追加后还是同一条记录", merged["id"] == first_id, f"{merged['id']} vs {first_id}")
+    check("追加保留了原备注", "第一轮" in (merged.get("note") or ""), str(merged.get("note")))
+
+    replaced = confirm_meal("面条", mode="replace", note="第二轮")
+    names2 = [i["food_name"] for i in replaced["items"]]
+    check("覆盖会换掉旧内容", "米饭" not in names2, str(names2))
+    check("覆盖标记正确", replaced.get("replaced") is True, str(replaced.get("replaced")))
+
     print("\n全部主链路自测通过。")
 
 

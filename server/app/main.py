@@ -276,6 +276,8 @@ class RecognitionConfirmIn(BaseModel):
     source: Optional[str] = None
     note: Optional[str] = None
     items: Optional[List[MealItemIn]] = None
+    # 同一格已经有记录时：replace 整体替换（旧行为）/ append 并到原记录上
+    mode: str = "replace"
 
 
 class RecommendIn(BaseModel):
@@ -337,6 +339,23 @@ def _client_ip(request: Request) -> str:
     return request.client.host if request.client else ""
 
 
+PASSWORD_MIN_LENGTH = 8
+PASSWORD_MAX_LENGTH = 128
+
+
+def _check_password(password: str) -> str:
+    """和站点保持一致：8~128 位，不能只有空格。"""
+    value = password or ""
+    if not value.strip():
+        raise HTTPException(status_code=400, detail="密码不能全是空格")
+    if len(value) < PASSWORD_MIN_LENGTH or len(value) > PASSWORD_MAX_LENGTH:
+        raise HTTPException(
+            status_code=400,
+            detail=f"密码需要 {PASSWORD_MIN_LENGTH}~{PASSWORD_MAX_LENGTH} 位",
+        )
+    return value
+
+
 def _issue_tokens(user_id: int) -> Dict:
     """登录成功：登记这台设备 + 发访问令牌（站点登录与本地登录共用）。"""
     device_token = new_device_token()
@@ -375,10 +394,35 @@ def verify_sms(payload: SmsVerifyIn, request: Request):
             )
         except SiteAuthError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        # 站点的注册接口只认验证码、没地方存密码。所以两件事自己做：
+        #   1. 是不是新用户由我们判断（站点不会告诉我们）
+        #   2. 新用户必须设密码，密码存在我们本地
+        known = db.query_one(
+            "SELECT id FROM users WHERE site_user_id=?", (identity["site_user_id"],)
+        ) or db.query_one("SELECT id FROM users WHERE phone=?", (identity["phone"],))
+
+        password = payload.password or ""
+        if not known:
+            # 不给密码注册，这个号以后就只能靠短信进来，直接拦住
+            if not password:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"首次注册请设置密码（{PASSWORD_MIN_LENGTH} 位以上）",
+                )
+            password = _check_password(password)
+
         user = db.find_or_create_site_user(
             identity["site_user_id"], identity["phone"], identity.get("nickname", "")
         )
+        # 本地留一份密码（站点存不了）；已经有密码的不覆盖
+        if password and not user.get("password_hash"):
+            db.execute(
+                "UPDATE users SET password_hash=? WHERE id=?",
+                (hash_password(password), user["id"]),
+            )
         return _issue_tokens(user["id"])
+
     row = db.query_one("SELECT * FROM sms_codes WHERE phone=?", (payload.phone,))
     if not row or row["code"] != payload.code:
         raise HTTPException(status_code=400, detail="验证码不正确")
@@ -388,10 +432,14 @@ def verify_sms(payload: SmsVerifyIn, request: Request):
     user = db.query_one("SELECT * FROM users WHERE phone=?", (payload.phone,))
     if not user:
         if not payload.password:
-            raise HTTPException(status_code=400, detail="首次注册请设置密码")
+            raise HTTPException(
+                status_code=400,
+                detail=f"首次注册请设置密码（{PASSWORD_MIN_LENGTH} 位以上）",
+            )
+        password = _check_password(payload.password)
         user_id = db.execute(
             "INSERT INTO users(phone, password_hash, created_at, public_id) VALUES(?,?,?,?)",
-            (payload.phone, hash_password(payload.password), now_iso(), db.new_unique_public_id()),
+            (payload.phone, hash_password(password), now_iso(), db.new_unique_public_id()),
         )
         db.execute(
             "INSERT INTO profiles(user_id, city, goals, updated_at) VALUES(?,?,?,?)",
@@ -413,7 +461,15 @@ def verify_sms(payload: SmsVerifyIn, request: Request):
 
 @app.post("/api/v1/auth/login/password")
 def login_password(payload: PasswordLoginIn, request: Request):
-    # 方案 C：密码也交给站点校验，保证网站与 App 是同一套账号
+    # 密码有两个来源，两边都要试：
+    #   1. App 内注册时我们把密码存在自己库里（站点存不了）
+    #   2. 网站注册的老账号，密码在站点那边
+    local = db.query_one("SELECT * FROM users WHERE phone=?", (payload.phone,))
+    if local and local.get("password_hash") and verify_password(
+        payload.password, local["password_hash"]
+    ):
+        return _issue_tokens(local["id"])
+
     if site_auth.enabled():
         try:
             identity = site_auth.login_with_password(
@@ -425,16 +481,7 @@ def login_password(payload: PasswordLoginIn, request: Request):
             identity["site_user_id"], identity["phone"], identity.get("nickname", "")
         )
         return _issue_tokens(user["id"])
-    user = db.query_one("SELECT * FROM users WHERE phone=?", (payload.phone,))
-    if not user or not verify_password(payload.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="手机号或密码不正确")
-    # 密码登录也登记这台设备：下次打开可以直接免验证码进来
-    device_token = new_device_token()
-    db.execute(
-        "INSERT INTO devices(user_id, token_hash, created_at, last_login_at) VALUES(?,?,?,?)",
-        (user["id"], hash_device_token(device_token), now_iso(), now_iso()),
-    )
-    return {"access_token": create_access_token(user["id"]), "device_token": device_token}
+    raise HTTPException(status_code=401, detail="手机号或密码不正确")
 
 
 @app.post("/api/v1/auth/device/login")
@@ -716,19 +763,66 @@ def _resolve_meal_date(payload) -> str:
     return (getattr(payload, "eaten_at", None) or now_iso())[:10]
 
 
-def _insert_meal(payload: MealCreateIn, user_id: int):
-    """一天四餐、每餐只留一条：同一格已经有记录就直接覆盖，不新增。
+def _insert_meal(payload: MealCreateIn, user_id: int, mode: str = "replace"):
+    """一天四餐、每餐只留一条。
 
-    先入库（热量留空），估算由调用方丢给后台任务。
+    mode="replace"：这一格已有记录就整体替换（旧行为）。
+    mode="append" ：把这次的并进已有记录，不覆盖；同菜同食材的不重复加。
+
+    返回 (meal_id, 是否还要估算, 是不是覆盖了旧的, 是不是追加到旧的)。
     """
-    needs = _needs_estimation(payload.items)
-    status = "estimating" if needs else "confirmed"
-    eaten_at = payload.eaten_at or now_iso()
     meal_date = _resolve_meal_date(payload)
     existing = db.query_one(
         "SELECT * FROM meals WHERE user_id=? AND meal_date=? AND meal_slot=? AND status<>'deleted'",
         (user_id, meal_date, payload.meal_slot),
     )
+
+    if existing and mode == "append":
+        meal_id = existing["id"]
+        merged: List[MealItemIn] = []
+        seen = set()
+        # 先把原有的排前面，并保留它们已经算好的热量
+        for row in db.query_all(
+            "SELECT * FROM meal_items WHERE meal_id=? ORDER BY id", (meal_id,)
+        ):
+            key = ((row["food_name"] or "").strip(), (row["dish_name"] or "").strip())
+            seen.add(key)
+            merged.append(
+                MealItemIn(
+                    food_name=row["food_name"],
+                    dish_name=row["dish_name"] or "",
+                    food_code=row["food_code"],
+                    energy_kcal=row["energy_kcal"],
+                    amount_text=row["amount_text"] or "",
+                    cooking=row["cooking"] or "",
+                    match_status=row["match_status"] or "kept",
+                )
+            )
+        # 再把这次新加的接上；完全一样的（同食材同菜）不重复加
+        for item in payload.items:
+            key = (item.food_name.strip(), (item.dish_name or "").strip())
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(item)
+
+        needs = _needs_estimation(merged)
+        status = "estimating" if needs else "confirmed"
+        old_note = (existing.get("note") or "").strip()
+        new_note = (payload.note or "").strip()
+        note = "；".join(n for n in (old_note, new_note) if n)
+        # 追加不改这顿饭原本的时间，也不动来源
+        db.execute(
+            "UPDATE meals SET note=?, status=?, updated_at=? WHERE id=?",
+            (note, status, now_iso(), meal_id),
+        )
+        db.execute("DELETE FROM meal_items WHERE meal_id=?", (meal_id,))
+        _save_items(meal_id, merged, index_fallback=not needs)
+        return meal_id, needs, False, True
+
+    needs = _needs_estimation(payload.items)
+    status = "estimating" if needs else "confirmed"
+    eaten_at = payload.eaten_at or now_iso()
     if existing:
         meal_id = existing["id"]
         db.execute(
@@ -753,16 +847,18 @@ def _insert_meal(payload: MealCreateIn, user_id: int):
             ),
         )
     _save_items(meal_id, payload.items, index_fallback=not needs)
-    return meal_id, needs, existing is not None
+    return meal_id, needs, existing is not None, False
 
 
-def _store_meal_photos(meal_id: int, user_id: int, images: List[str]):
+def _store_meal_photos(meal_id: int, user_id: int, images: List[str], append: bool = False):
     """把这一餐的照片传到七牛，成功的那些把 object_key 记到 meal_photos。
 
     跑在后台任务里：图片在识别阶段已经进过服务端，这里只负责落库存档，不让用户等。
-    先清空旧照片再写——同一格是覆盖式记录，换了餐就不该留着上一餐的图。
+    append=False 时先清空旧照片再写（换了一顿就不该留着上一顿的图）；
+    append=True 时保留旧图，只往后追加。
     """
-    db.execute("DELETE FROM meal_photos WHERE meal_id=?", (meal_id,))
+    if not append:
+        db.execute("DELETE FROM meal_photos WHERE meal_id=?", (meal_id,))
     for seq, raw in enumerate(images):
         data = services.decode_image_payload(raw)
         if not data:
@@ -828,7 +924,7 @@ def create_meal(
     if payload.meal_slot not in ("breakfast", "lunch", "dinner", "supper"):
         raise HTTPException(status_code=400, detail="餐次只能是 breakfast / lunch / dinner / supper")
     _check_backfill(payload.eaten_at)
-    meal_id, needs, replaced = _insert_meal(payload, user_id)
+    meal_id, needs, replaced, _appended = _insert_meal(payload, user_id)
     if needs:
         background.add_task(_run_estimation, meal_id)
     result = get_meal(meal_id, user_id)
@@ -1089,21 +1185,26 @@ def confirm_recognition(
         note=payload.note if payload.note is not None else result.get("note", ""),
         items=items,
     )
-    meal_id, needs, replaced = _insert_meal(meal_payload, user_id)
+    # 同一格已经有记录时：用户选“并进去”就 append，否则按老行为整体替换
+    mode = payload.mode if payload.mode in ("replace", "append") else "replace"
+    meal_id, needs, replaced, appended = _insert_meal(meal_payload, user_id, mode)
     db.execute("UPDATE recognition_jobs SET status='confirmed' WHERE id=?", (job_id,))
-    # 照片存档：有图就丢给后台传七牛；没图则清掉旧图（同一格是覆盖式记录）
+    # 照片存档：有图就丢给后台传七牛
     images = json.loads(job["payload"]).get("images_base64") or []
     # 图片已经交给后台传七牛了，任务里那份 base64 马上清掉，不然库会一直涨
     _shrink_job_payload(job_id)
     if images:
-        background.add_task(_store_meal_photos, meal_id, user_id, images)
-    else:
+        # 追加时保留旧图，只往后加
+        background.add_task(_store_meal_photos, meal_id, user_id, images, mode == "append")
+    elif mode != "append":
+        # 覆盖式记录又没带新图：旧图应该清掉；追加时不动旧图
         db.execute("DELETE FROM meal_photos WHERE meal_id=?", (meal_id,))
     # 用户确认完就立刻返回，热量由后台估算完成后再回填
     if needs:
         background.add_task(_run_estimation, meal_id)
     result = get_meal(meal_id, user_id)
     result["replaced"] = replaced
+    result["appended"] = appended
     return result
 
 
