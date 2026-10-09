@@ -72,4 +72,7 @@ BAIDU_MAP_AK = os.environ.get("BAIDU_MAP_AK", "")
 
 # AI 调用配额：防止有人拿接口白嫖你的 DeepSeek 额度
 AI_DAILY_PER_USER = int(os.environ.get("SHIJI_AI_DAILY_PER_USER", 100))
+
+# 识别任务（里面存着上传图片的 base64）保留多少天，超期就删
+RECOGNITION_KEEP_DAYS = int(os.environ.get("SHIJI_RECOGNITION_KEEP_DAYS", "7"))
 AI_DAILY_TOTAL = int(os.environ.get("SHIJI_AI_DAILY_TOTAL", 2000))

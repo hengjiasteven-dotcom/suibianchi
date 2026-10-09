@@ -21,6 +21,7 @@ from .config import (
     AI_DAILY_PER_USER,
     AI_DAILY_TOTAL,
     CHAT_TTL_SECONDS,
+    RECOGNITION_KEEP_DAYS,
     SMS_CODE_TTL_SECONDS,
     SMS_DEV_MODE,
 )
@@ -103,6 +104,8 @@ def on_startup():
     import_heat_index_file()
     count = services.load_heat_index()
     app.state.heat_index_count = count
+    # 启动时清一次过期的识别任务（里面存着图片 base64，不清理会一直涨）
+    _cleanup_recognition_jobs(force=True)
 
 
 # ------------------------------------------------------------------ 依赖
@@ -989,9 +992,49 @@ def add_photos(meal_id: int, payload: PhotoIn, user_id: int = Depends(current_us
 
 # ------------------------------------------------------------------ 识别
 
+# 识别任务里存着上传图片的 base64，是库里最大的一块垃圾。两头都要收：
+#   1. 用户确认入库后立刻把图片丢掉（这时照片已经传七牛了）
+#   2. 整条任务也只留 RECOGNITION_KEEP_DAYS 天
+_JOB_CLEANUP: Dict[str, Optional[datetime]] = {"at": None}
+
+
+def _shrink_job_payload(job_id: str) -> None:
+    """把识别任务里的图片 base64 清掉，只留文字信息。"""
+    job = db.query_one("SELECT payload FROM recognition_jobs WHERE id=?", (job_id,))
+    if not job:
+        return
+    try:
+        original = json.loads(job["payload"])
+    except Exception:  # noqa: BLE001
+        original = {}
+    slim = {k: v for k, v in original.items() if k != "images_base64"}
+    slim["images_count"] = len(original.get("images_base64") or [])
+    db.execute(
+        "UPDATE recognition_jobs SET payload=? WHERE id=?",
+        (json.dumps(slim, ensure_ascii=False), job_id),
+    )
+
+
+def _cleanup_recognition_jobs(force: bool = False) -> int:
+    """删掉过期的识别任务，返回删了几条。
+
+    最多一小时真扫一次表，不然每个识别请求都删一遍太浪费。
+    """
+    now = datetime.now(timezone.utc)
+    last = _JOB_CLEANUP["at"]
+    if not force and last is not None and (now - last).total_seconds() < 3600:
+        return 0
+    _JOB_CLEANUP["at"] = now
+    cutoff = (now - timedelta(days=RECOGNITION_KEEP_DAYS)).isoformat()
+    return db.execute_rowcount(
+        "DELETE FROM recognition_jobs WHERE created_at < ?", (cutoff,)
+    )
+
 @app.post("/api/v1/recognition")
 def recognize(payload: RecognitionIn, user_id: int = Depends(current_user)):
     check_ai_quota(user_id)
+    # 顺手清一次过期的识别任务（内部限流，不会每个请求都真删）
+    _cleanup_recognition_jobs()
     ai = services.get_ai()
     result = ai.recognize(
         payload.image_keys, payload.text, payload.meal_slot, payload.source, payload.images_base64
@@ -1050,6 +1093,8 @@ def confirm_recognition(
     db.execute("UPDATE recognition_jobs SET status='confirmed' WHERE id=?", (job_id,))
     # 照片存档：有图就丢给后台传七牛；没图则清掉旧图（同一格是覆盖式记录）
     images = json.loads(job["payload"]).get("images_base64") or []
+    # 图片已经交给后台传七牛了，任务里那份 base64 马上清掉，不然库会一直涨
+    _shrink_job_payload(job_id)
     if images:
         background.add_task(_store_meal_photos, meal_id, user_id, images)
     else:

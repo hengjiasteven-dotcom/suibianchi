@@ -306,6 +306,14 @@ def execute(sql, params=()):
         return cur.lastrowid
 
 
+def execute_rowcount(sql, params=()) -> int:
+    """执行写操作并返回影响行数（清理任务要报“删了几条”）。"""
+    with connect() as conn:
+        cur = conn.execute(sql, params)
+        conn.commit()
+        return cur.rowcount
+
+
 def find_or_create_site_user(site_user_id: int, phone: str, nickname: str = "") -> Dict:
     """方案 C：把站点用户映射成本地用户。
 

@@ -10,6 +10,7 @@
 """
 
 import sys
+import json
 import os
 import time
 from pathlib import Path
@@ -111,6 +112,31 @@ def main():
         r.status_code == 200 and meal["status"] == "estimating",
         f"状态 {meal['status']}",
     )
+
+    # 识别任务里存着上传图片的 base64：确认入库后必须立刻清掉，不然库会一直涨
+    job_row = db.query_one("SELECT payload FROM recognition_jobs WHERE id=?", (job["job_id"],))
+    payload_after = json.loads(job_row["payload"])
+    check(
+        "确认后识别任务里的图片被清掉",
+        "images_base64" not in payload_after,
+        f"剩下的字段 {list(payload_after.keys())}",
+    )
+
+    # 过期任务会被定时清理
+    uid = db.query_one("SELECT id FROM users ORDER BY id LIMIT 1")["id"]
+    db.execute(
+        "INSERT INTO recognition_jobs(id, user_id, payload, result, status, created_at) "
+        "VALUES(?,?,?,?,?,?)",
+        (
+            "expiredjob00000000001", uid, "{}", "{}", "pending",
+            "2000-01-01T00:00:00+00:00",
+        ),
+    )
+    from app.main import _cleanup_recognition_jobs  # noqa: E402
+
+    deleted = _cleanup_recognition_jobs(force=True)
+    left = db.query_one("SELECT id FROM recognition_jobs WHERE id=?", ("expiredjob00000000001",))
+    check("过期识别任务被清理", deleted >= 1 and left is None, f"删了 {deleted} 条")
 
     filled = wait_estimated(client, headers, meal["id"])
     check(
