@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  正式包（release）专用：只允许 HTTPS。
+  debug 包用的是 src/main 里的版本（允许明文，方便模拟器/局域网连本机服务端）。
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+</network-security-config>

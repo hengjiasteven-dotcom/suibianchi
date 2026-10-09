@@ -1,0 +1,5 @@
+# 签名密钥与密码：绝对不要提交，丢了就没法给这个应用发更新
+keystore.properties
+keystore/
+*.jks
+*.keystore

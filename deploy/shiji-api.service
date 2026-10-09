@@ -1,0 +1,22 @@
+# /etc/systemd/system/shiji-api.service
+# 装了之后：systemctl daemon-reload && systemctl enable --now shiji-api
+[Unit]
+Description=Shiji API (随便吃 后端)
+After=network.target
+
+[Service]
+Type=simple
+User=www
+Group=www
+WorkingDirectory=/www/wwwroot/shiji-api/server
+Environment=PYTHONUNBUFFERED=1
+# 注意：对话会话保存在进程内存里，所以固定 1 个 worker；
+# 以后要不要多 worker，先把会话换到 Redis 再说。
+ExecStart=/www/wwwroot/shiji-api/server/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8010 --workers 1
+Restart=always
+RestartSec=3
+StandardOutput=append:/www/wwwlogs/shiji-api.log
+StandardError=append:/www/wwwlogs/shiji-api.log
+
+[Install]
+WantedBy=multi-user.target

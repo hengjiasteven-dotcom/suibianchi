@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 自适应图标外圈底色：取自插画外缘平均色，蒙版外万一露出也不是白圈 -->
+    <color name="ic_launcher_background">#8B8478</color>
+</resources>

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 拍照临时文件放应用缓存目录，通过 FileProvider 授权给相机应用写入 -->
+    <cache-path name="photos" path="photos/" />
+</paths>

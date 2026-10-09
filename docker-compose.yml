@@ -1,0 +1,16 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    env_file:
+      - server/.env
+    volumes:
+      - shiji-data:/data
+    # 只绑到宿主机本地：80/443 留给服务器上已有的网站，由 Nginx 按域名转发过来
+    ports:
+      - "127.0.0.1:8010:8000"
+    restart: unless-stopped
+
+volumes:
+  shiji-data:
