@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.util.Base64
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
@@ -400,6 +401,25 @@ fun ShijiApp() {
     }
 
     // 隐私政策：登录前、登录后都是整页盖住
+    // 系统返回键（含华为侧边的左右退出键）：
+    // 按“最上层先关”的顺序接管，全部关完才交给系统真的退出。
+    // 不接管的话，个人主页、广场子页这些自己管理状态的页面会被直接退到桌面。
+    BackHandler(
+        enabled = showPrivacy || userCard != null || showRecordDialog ||
+            editingMeal != null || recordStage != 0 || showProfile ||
+            squareRoute !is SquareRoute.Home
+    ) {
+        when {
+            showPrivacy -> showPrivacy = false
+            userCard != null -> userCard = null
+            showRecordDialog -> showRecordDialog = false
+            editingMeal != null -> editingMeal = null
+            recordStage != 0 -> clearPending()
+            showProfile -> showProfile = false
+            squareRoute !is SquareRoute.Home -> squareRoute = SquareRoute.Home
+        }
+    }
+
     if (showPrivacy) {
         PrivacyPage(onBack = { showPrivacy = false })
         return

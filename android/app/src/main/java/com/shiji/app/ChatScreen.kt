@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.TextButton
@@ -140,12 +141,12 @@ fun ChatScreen() {
         refreshPending()
     }
 
-    LaunchedEffect(ChatStore.messages.size) {
-        if (ChatStore.messages.isNotEmpty()) {
-            // 等新消息完成布局再滚，否则会停在倒数第二条
-            delay(80)
-            listState.animateScrollToItem(ChatStore.messages.lastIndex)
-        }
+    LaunchedEffect(ChatStore.messages.size, ChatStore.sending) {
+        // 等新消息完成布局再滚，否则会停在倒数第二条。
+        // 把 sending 也算进 key，让「正在想」气泡出现时也滚到底。
+        delay(80)
+        val last = ChatStore.messages.lastIndex + if (ChatStore.sending) 1 else 0
+        if (last >= 0) listState.animateScrollToItem(last)
     }
 
     fun send() {
@@ -170,7 +171,31 @@ fun ChatScreen() {
                     ChatStore.hint = ""
                 }
             } catch (e: Exception) {
-                ChatStore.hint = "发送失败：${e.message ?: "网络异常"}"
+                val msg = e.message ?: ""
+                if (msg.contains("410") || msg.contains("超时")) {
+                    // 服务端已经把这段对话结束了（闲置超过 10 分钟）。
+                    // 不能让用户卡死：自动开一段新的，把刚才那句话重发一次。
+                    ChatStore.messages.add(
+                        false to "上一段对话超时了，已经自动重新开始，我把你刚说的又发了一次。"
+                    )
+                    val restarted = runCatching {
+                        val session = ApiClient.api.chatStart()
+                        ChatStore.sessionId = session.session_id
+                        ChatStore.notice = session.notice
+                        ApiClient.api.chatMessage(session.session_id, ChatMessageRequest(text))
+                    }.getOrNull()
+                    if (restarted != null) {
+                        ChatStore.messages.add(false to restarted.reply)
+                        ChatStore.likes.clear()
+                        ChatStore.likes.addAll(restarted.likes)
+                        if (restarted.extracted.isNotEmpty()) refreshPending()
+                        ChatStore.hint = ""
+                    } else {
+                        ChatStore.hint = "对话已超时，重开失败，请再发一次"
+                    }
+                } else {
+                    ChatStore.hint = "发送失败：${msg.ifBlank { "网络异常" }}"
+                }
             } finally {
                 ChatStore.sending = false
             }
@@ -195,6 +220,10 @@ fun ChatScreen() {
             ) {
                 itemsIndexed(ChatStore.messages) { _, message ->
                     ChatBubble(mine = message.first, text = message.second)
+                }
+                // 等回复时给个正在跑的气泡，不然用户不知道到底有没有发出去
+                if (ChatStore.sending) {
+                    item { ThinkingBubble() }
                 }
             }
             // 滑上去看历史时，给个一键回到最新的箭头
@@ -305,6 +334,29 @@ private fun ChatBubble(mine: Boolean, text: String) {
                 .background(if (mine) Color(0x8CE8D9B0) else Color(0x40101418))
                 .padding(horizontal = 12.dp, vertical = 10.dp)
         )
+    }
+}
+
+
+/** 等回复时的占位气泡：带转圈，让用户知道真的在跑。 */
+@Composable
+private fun ThinkingBubble() {
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
+        Row(
+            Modifier
+                .clip(RoundedCornerShape(14.dp))
+                .background(Color(0x40101418))
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(13.dp),
+                strokeWidth = 1.6.dp,
+                color = Color(0xFFE8D9B0)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text("正在想…", fontSize = 13.sp, color = Color(0xCCFFFFFF))
+        }
     }
 }
 

@@ -745,23 +745,38 @@ class DeepSeekAI(MockAI):
         return response.json()["choices"][0]["message"]["content"]
 
     def recognize(self, image_keys, text, meal_slot, source, images_base64=None):  # pragma: no cover
-        prompt = (
-            "请识别这一餐实际吃到的食材和菜品，只列出名称，不要估算热量。要求："
-            "注意：可能一次发来多张照片（全景、特写、订单截图等），它们拍的是同一餐，"
-            "请合成一份清单，同一样东西不要重复计数；"
-            "① 每种食材单独列出，不要合成一盘菜；"
-            "② 如果图是外卖订单、菜单或小票截图，先读出上面的菜名和份数，"
-            "再把每道菜拆成食材，并在 dish_name 里标出它属于哪道菜；份数是 2 就按两份写；"
-            "③ 图上有备注（如「少辣」「不要香菜」）时，放进 note 字段；"
-            "④ 顺手判断这一餐是外卖还是自己做的：外卖订单、外卖包装、一次性餐具→takeout；"
-            "自家做的饭菜→diy；判断不了就写 unknown；"
-            "⑤ 判断不出的不要写。只输出 JSON，不要解释："
-            '{"items":[{"food_name":"","dish_name":"","amount_text":"","cooking":""}],"note":"","source":""}'
-            f"\n餐次：{meal_slot}；来源：{source}；用户备注：{text}"
-        )
+        # 有图时文字只是补充；没图时那句话就是全部信息，必须从文字里拆出菜品
+        if images_base64:
+            task = (
+                "请识别这一餐实际吃到的食材和菜品，只列出名称，不要估算热量。要求："
+                "注意：可能一次发来多张照片（全景、特写、订单截图等），它们拍的是同一餐，"
+                "请合成一份清单，同一样东西不要重复计数；"
+                "① 每种食材单独列出，不要合成一盘菜；"
+                "② 如果图是外卖订单、菜单或小票截图，先读出上面的菜名和份数，"
+                "再把每道菜拆成食材，并在 dish_name 里标出它属于哪道菜；份数是 2 就按两份写；"
+                "③ 图上有备注（如「少辣」「不要香菜」）时，放进 note 字段；"
+                "④ 顺手判断这一餐是外卖还是自己做的：外卖订单、外卖包装、一次性餐具→takeout；"
+                "自家做的饭菜→diy；判断不了就写 unknown；"
+                "⑤ 判断不出的不要写。只输出 JSON，不要解释："
+                '{"items":[{"food_name":"","dish_name":"","amount_text":"","cooking":""}],"note":"","source":""}'
+                f"\n餐次：{meal_slot}；来源：{source}；用户补充的文字：{text}"
+            )
+        else:
+            # 纯文字：这句话就是全部信息，别把它当成备注忽略掉
+            task = (
+                "用户没有发图片，只写了一句吃了什么，这句话就是全部信息。"
+                "请把这句话拆成菜品和食材，只列名称，不要估算热量。要求："
+                "① 先认出提到的菜品名（如「黄焖鸡米饭」），填进 dish_name；"
+                "② 再把每道菜拆成具体食材（鸡腿肉、香菇、米饭……），"
+                "每种单独一行，food_name 填食材；"
+                "③ 用户没提到的不要编；④ 只输出 JSON，不要解释："
+                '{"items":[{"food_name":"","dish_name":"","amount_text":"","cooking":""}],"note":"","source":""}'
+                f"\n餐次：{meal_slot}；来源：{source}；用户原话（这就是全部信息）：{text}"
+            )
+
+        prompt = task
         blocks: List[Dict] = [{"type": "text", "text": prompt}]
         for image in images_base64 or []:
-            url = image if image.startswith("data:") else f"data:image/jpeg;base64,{image}"
             url = to_image_url(image)
             blocks.append({"type": "image_url", "image_url": {"url": url}})
         try:
@@ -800,6 +815,12 @@ class DeepSeekAI(MockAI):
             note_text = f"{text.strip()}；{note_text}"
         elif text.strip():
             note_text = text.strip()
+        # 模型偶尔会返回空清单：退回本地关键词拆分，至少不能什么都不给
+        if not items and text.strip():
+            fallback = super().recognize(image_keys, text, meal_slot, source, images_base64)
+            if fallback.get("items"):
+                fallback["engine_note"] = "模型没拆出来，已按文字关键词兜底"
+                return fallback
         return {
             "meal_slot": meal_slot,
             "source": _pick_source(data.get("source"), source),
