@@ -206,7 +206,7 @@ fun ChatScreen() {
         if (ChatStore.notice.isNotBlank()) {
             Text(
                 ChatStore.notice,
-                fontSize = 11.sp,
+                fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.padding(top = 4.dp, bottom = 6.dp)
             )
@@ -253,7 +253,7 @@ fun ChatScreen() {
         if (ChatStore.hint.isNotBlank()) {
             Text(
                 ChatStore.hint,
-                fontSize = 11.sp,
+                fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 4.dp)
             )
@@ -275,7 +275,7 @@ fun ChatScreen() {
             ) {
                 Text(
                     "聊到这些了，先选个程度再确认",
-                    fontSize = 10.sp,
+                    fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(bottom = 2.dp)
                 )
@@ -302,7 +302,7 @@ fun ChatScreen() {
             OutlinedTextField(
                 value = input,
                 onValueChange = { input = it },
-                placeholder = { Text("想吃什么？", fontSize = 13.sp) },
+                placeholder = { Text("想吃什么？", fontSize = 15.sp) },
                 maxLines = 3,
                 modifier = Modifier.weight(1f)
             )
@@ -311,7 +311,7 @@ fun ChatScreen() {
                 onClick = { send() },
                 enabled = !ChatStore.sending && ChatStore.sessionId != null,
                 modifier = Modifier.padding(bottom = 4.dp)
-            ) { Text("发送", fontSize = 14.sp) }
+            ) { Text("发送", fontSize = 16.sp) }
         }
     }
 }
@@ -326,12 +326,12 @@ private fun ChatBubble(mine: Boolean, text: String) {
     ) {
         Text(
             text,
-            fontSize = 14.sp,
+            fontSize = 16.sp,
             color = if (mine) Color(0xFF2A2114) else Color.White,
             modifier = Modifier
                 .fillMaxWidth(0.86f)
                 .clip(shape)
-                .background(if (mine) Color(0x8CE8D9B0) else Color(0x40101418))
+                .background(if (mine) Color(0x8CE8D9B0) else Color(0x66101418))
                 .padding(horizontal = 12.dp, vertical = 10.dp)
         )
     }
@@ -345,7 +345,7 @@ private fun ThinkingBubble() {
         Row(
             Modifier
                 .clip(RoundedCornerShape(14.dp))
-                .background(Color(0x40101418))
+                .background(Color(0x66101418))
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -355,7 +355,7 @@ private fun ThinkingBubble() {
                 color = Color(0xFFE8D9B0)
             )
             Spacer(Modifier.width(8.dp))
-            Text("正在想…", fontSize = 13.sp, color = Color(0xCCFFFFFF))
+            Text("正在想…", fontSize = 15.sp, color = Color(0xCCFFFFFF))
         }
     }
 }
@@ -373,13 +373,13 @@ private fun PendingPreferenceRow(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 "爱好",
-                fontSize = 11.sp,
+                fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.width(34.dp)
             )
-            Text(item.keyword, fontSize = 13.sp, modifier = Modifier.weight(1f))
-            TextButton(onClick = onReject) { Text("拒绝", fontSize = 11.sp) }
-            TextButton(onClick = { onConfirm(level) }) { Text("确定", fontSize = 11.sp) }
+            Text(item.keyword, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            TextButton(onClick = onReject) { Text("拒绝", fontSize = 13.sp) }
+            TextButton(onClick = { onConfirm(level) }) { Text("确定", fontSize = 13.sp) }
         }
         LevelPicker(
             options = PREFERENCE_LEVELS,
@@ -405,13 +405,13 @@ private fun PendingRestrictionRow(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 "忌口",
-                fontSize = 11.sp,
+                fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.width(34.dp)
             )
-            Text(item.keyword, fontSize = 13.sp, modifier = Modifier.weight(1f))
-            TextButton(onClick = onReject) { Text("拒绝", fontSize = 11.sp) }
-            TextButton(onClick = { onConfirm(level) }) { Text("确定", fontSize = 11.sp) }
+            Text(item.keyword, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            TextButton(onClick = onReject) { Text("拒绝", fontSize = 13.sp) }
+            TextButton(onClick = { onConfirm(level) }) { Text("确定", fontSize = 13.sp) }
         }
         LevelPicker(
             options = RESTRICTION_LEVELS,

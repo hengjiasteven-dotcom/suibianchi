@@ -1507,6 +1507,7 @@ def _share_meal_entry(meal: Dict) -> Dict:
 
     entry = {
         "meal_slot": meal["meal_slot"],
+        "eaten_at": meal.get("eaten_at") or "",
         "foods": [r["food_name"] for r in rows if r.get("food_name")],
     }
     if dishes:

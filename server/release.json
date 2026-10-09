@@ -1,7 +1,7 @@
 {
-  "version_code": 2,
-  "version_name": "0.2.0",
-  "object_key": "app/suibianchi-0.2.0.apk",
-  "notes": "1. 注册必须设置密码，不允许无密码账号\n2. 同一餐再记一次会问「并进去 / 覆盖掉」，不再静默替换\n3. 纯文字也能识别，不必非传图片\n4. 修复华为机型返回键退出到桌面\n5. 对话发送后显示「正在想」，超时会自动重开\n6. 支持自定义 6 位 ID、内置头像、广场分享带图",
+  "version_code": 3,
+  "version_name": "0.2.1",
+  "object_key": "app/suibianchi-0.2.1.apk",
+  "notes": "修复记录和分享时间按本机时区显示；字号整体调大并提高对比度；新增使用说明；记录页顶部精简",
   "force": false
 }

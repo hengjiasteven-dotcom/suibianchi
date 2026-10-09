@@ -42,7 +42,7 @@ fun ChoiceItem(
         RadioButton(selected = selected, onClick = null)
         Text(
             label,
-            fontSize = 14.sp,
+            fontSize = 16.sp,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
         )
     }
@@ -67,7 +67,7 @@ fun CheckItem(
         Checkbox(checked = checked, onCheckedChange = null)
         Text(
             label,
-            fontSize = 14.sp,
+            fontSize = 16.sp,
             fontWeight = if (checked) FontWeight.SemiBold else FontWeight.Normal
         )
     }
@@ -75,7 +75,7 @@ fun CheckItem(
 
 
 /** 弹窗底色：比原来那层接近不透明的深色淡很多，背后的图能透出来一点。 */
-val DialogGlass = Color(0x52101418)
+val DialogGlass = Color(0x76101418)
 
 /** 弹窗圆角：跟登录页那张卡片保持一致。 */
 private val DialogShape = RoundedCornerShape(20.dp)
@@ -96,7 +96,7 @@ fun AlertDialogHost(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        modifier = Modifier.border(1.dp, Color(0x40FFFFFF), DialogShape),
+        modifier = Modifier.border(1.dp, Color(0x55FFFFFF), DialogShape),
         shape = DialogShape,
         containerColor = DialogGlass,
         title = { Text(title) },

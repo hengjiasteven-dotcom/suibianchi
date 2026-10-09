@@ -157,16 +157,16 @@ class MainActivity : ComponentActivity() {
 }
 /** 背景图 + 毛玻璃：整体用深色配色，面板用半透明玻璃。 */
 private val GlassScheme = darkColorScheme(
-    primary = Color(0xFF9CC4FF),
+    primary = Color(0xFFB7D4FF),
     onPrimary = Color(0xFF10233A),
     secondary = Color(0xFFBFD4FF),
     background = Color.Transparent,
     onBackground = Color.White,
-    surface = Color(0x8A14181E),
+    surface = Color(0x7A101418),
     onSurface = Color.White,
-    surfaceVariant = Color(0x33FFFFFF),
-    onSurfaceVariant = Color(0xE6FFFFFF),
-    outline = Color(0x99FFFFFF),
+    surfaceVariant = Color(0x45FFFFFF),
+    onSurfaceVariant = Color(0xF5FFFFFF),
+    outline = Color(0xCCFFFFFF),
     error = Color(0xFFFFB4AB)
 )
 
@@ -181,6 +181,7 @@ fun ShijiApp() {
     var restoring by remember { mutableStateOf(true) }
     var canQuickLogin by remember { mutableStateOf(false) }
     var showPrivacy by remember { mutableStateOf(false) }
+    var showGuide by remember { mutableStateOf(false) }
     var tab by remember { mutableStateOf(0) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
@@ -509,13 +510,14 @@ fun ShijiApp() {
     // 按“最上层先关”的顺序接管，全部关完才交给系统真的退出。
     // 不接管的话，个人主页、广场子页这些自己管理状态的页面会被直接退到桌面。
     BackHandler(
-        enabled = showPrivacy || userCard != null || showRecordDialog ||
+        enabled = showPrivacy || showGuide || userCard != null || showRecordDialog ||
             editingMeal != null || recordStage != 0 || showProfile ||
             squareRoute !is SquareRoute.Home
             || conflictExisting != null
     ) {
         when {
             showPrivacy -> showPrivacy = false
+            showGuide -> showGuide = false
             conflictExisting != null -> {
                 conflictExisting = null
                 clearPending()
@@ -531,6 +533,11 @@ fun ShijiApp() {
 
     if (showPrivacy) {
         PrivacyPage(onBack = { showPrivacy = false })
+        return
+    }
+
+    if (showGuide) {
+        GuidePage(onBack = { showGuide = false })
         return
     }
 
@@ -595,7 +602,7 @@ fun ShijiApp() {
                                 squareRoute is SquareRoute.Moments -> "朋友圈"
                                 else -> titles[tab]
                             },
-                            fontSize = 18.sp
+                            fontSize = 20.sp
                         )
                     },
                     navigationIcon = {
@@ -665,7 +672,7 @@ fun ShijiApp() {
                             }
                         },
                         icon = { Icon(navIcons[index], contentDescription = label) },
-                        label = { Text(label, fontSize = 11.sp) }
+                        label = { Text(label, fontSize = 13.sp) }
                     )
                 }
             }
@@ -739,6 +746,7 @@ fun ShijiApp() {
                             message = "账号已注销，全部记录已删除"
                         }
                     },
+                    onOpenGuide = { showGuide = true },
                     onOpenPrivacy = { showPrivacy = true }
                 )
             } else if (squareRoute is SquareRoute.Moments) {
@@ -768,6 +776,7 @@ fun ShijiApp() {
                     busy = busy,
                     message = message,
                     onRefresh = { loadHome() },
+                    onGuide = { showGuide = true },
                     onRecord = { showRecordDialog = true }
                 )
                 1 -> CalendarScreen(
@@ -956,11 +965,11 @@ fun ShijiApp() {
                         .heightIn(max = 280.dp)
                         .verticalScroll(rememberScrollState())
                 ) {
-                    Text(info.notes.ifBlank { "建议更新到最新版本。" }, fontSize = 13.sp)
+                    Text(info.notes.ifBlank { "建议更新到最新版本。" }, fontSize = 15.sp)
                     Spacer(Modifier.height(10.dp))
                     Text(
                         "当前版本 v${BuildConfig.VERSION_NAME}",
-                        fontSize = 11.sp,
+                        fontSize = 13.sp,
                         color = MaterialTheme.colorScheme.outline
                     )
                     if (updateDownloading) {
@@ -972,7 +981,7 @@ fun ShijiApp() {
                         Spacer(Modifier.height(6.dp))
                         Text(
                             "正在下载 $updateProgress%",
-                            fontSize = 11.sp,
+                            fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.outline
                         )
                     }
@@ -980,7 +989,7 @@ fun ShijiApp() {
                         Spacer(Modifier.height(8.dp))
                         Text(
                             updateError,
-                            fontSize = 12.sp,
+                            fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.error
                         )
                     }
@@ -988,7 +997,7 @@ fun ShijiApp() {
                         Spacer(Modifier.height(8.dp))
                         Text(
                             "安装包已经下好，点下面的按钮继续。",
-                            fontSize = 12.sp,
+                            fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -1046,19 +1055,19 @@ fun ShijiApp() {
                 ) {
                     Text(
                         "${slotLabel(old.meal_slot)}已经有记录了（${friendlyDateTime(old.eaten_at)}）",
-                        fontSize = 13.sp,
+                        fontSize = 15.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
                         old.items.joinToString("、") { it.food_name }.ifBlank { "（没有食材）" },
-                        fontSize = 13.sp,
+                        fontSize = 15.sp,
                         color = MaterialTheme.colorScheme.outline
                     )
                     Spacer(Modifier.height(12.dp))
                     Text(
                         "这次记的可以并进去（原来的不会丢），也可以直接覆盖掉。",
-                        fontSize = 12.sp,
+                        fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.outline
                     )
                 }
@@ -1176,7 +1185,7 @@ fun ShijiApp() {
                                 if (meal == null) {
                                     Text(
                                         "未记录",
-                                        fontSize = 12.sp,
+                                        fontSize = 14.sp,
                                         color = MaterialTheme.colorScheme.outline
                                     )
                                 } else {
@@ -1184,16 +1193,16 @@ fun ShijiApp() {
                                         .mapNotNull { it.dish_name?.trim()?.takeIf { name -> name.isNotBlank() } }
                                         .distinct()
                                     if (dishes.isNotEmpty()) {
-                                        Text(dishes.joinToString("、"), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                        Text(dishes.joinToString("、"), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                                     }
                                     Text(
                                         meal.items.joinToString("、") { it.food_name },
-                                        fontSize = 12.sp,
+                                        fontSize = 14.sp,
                                         color = MaterialTheme.colorScheme.outline
                                     )
-                                    Text(energyText(meal), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                                    Text(energyText(meal), fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
                                     if (meal.note.isNotBlank()) {
-                                        Text("备注：${meal.note}", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+                                        Text("备注：${meal.note}", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
                                     }
                                 }
                             }
@@ -1260,8 +1269,8 @@ fun LoginScreen(
             verticalArrangement = Arrangement.Center
         ) {
             Column(Modifier.fillMaxWidth().glass(20.dp).padding(20.dp)) {
-                Text("随便吃", fontSize = 30.sp, fontWeight = FontWeight.Bold)
-                Text("记录每一餐，吃得明白一点", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
+                Text("随便吃", fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                Text("记录每一餐，吃得明白一点", fontSize = 15.sp, color = MaterialTheme.colorScheme.outline)
                 Spacer(Modifier.height(20.dp))
                 // 验证码为主，密码作为备用登录方式
                 Row(Modifier.fillMaxWidth()) {
@@ -1304,7 +1313,7 @@ fun LoginScreen(
         )
         Text(
             "第一次用这个号必须设密码（8 位以上），以后能用它直接登录；老用户留空即可。",
-            fontSize = 11.sp,
+            fontSize = 13.sp,
             color = MaterialTheme.colorScheme.outline,
             modifier = Modifier.padding(top = 6.dp)
         )
@@ -1330,28 +1339,28 @@ fun LoginScreen(
             ) { Text("登录") }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = { showReset = true }, enabled = !busy) {
-                    Text("忘记密码？", fontSize = 12.sp)
+                    Text("忘记密码？", fontSize = 14.sp)
                 }
             }
         }
 
         if (canQuickLogin) {
             TextButton(onClick = onQuickLogin, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                Text("本机快速登录（免验证码）", fontSize = 13.sp)
+                Text("本机快速登录（免验证码）", fontSize = 15.sp)
             }
         }
 
         if (message.isNotBlank()) {
             Spacer(Modifier.height(10.dp))
-            Text(message, color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
+            Text(message, color = MaterialTheme.colorScheme.primary, fontSize = 15.sp)
         }
 
         Spacer(Modifier.height(12.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("登录即代表同意", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+            Text("登录即代表同意", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
             Text(
                 "《隐私政策》",
-                fontSize = 11.sp,
+                fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.clickable { onOpenPrivacy() }
             )
@@ -1386,7 +1395,7 @@ fun AppBackground() {
             modifier = Modifier.fillMaxSize().blur(3.dp)
         )
         // 轻微压暗：够白字看清，又不把照片盖死
-        Box(Modifier.fillMaxSize().background(Color(0x5C0B0D12)))
+        Box(Modifier.fillMaxSize().background(Color(0x520B0D12)))
     }
 }
 
@@ -1405,7 +1414,7 @@ private fun SplashScreen() {
         // 右下角版本号
         Text(
             "v" + BuildConfig.VERSION_NAME,
-            fontSize = 12.sp,
+            fontSize = 14.sp,
             color = Color(0x99FFFFFF),
             modifier = Modifier
                 .align(Alignment.BottomEnd)
@@ -1418,8 +1427,8 @@ private fun SplashScreen() {
 /** 毛玻璃面板：半透明底（能看到背后的图）+ 细边，且保证白字读得清。 */
 private fun Modifier.glass(radius: androidx.compose.ui.unit.Dp = 16.dp): Modifier = this
     .clip(RoundedCornerShape(radius))
-    .background(Color(0x52101418))
-    .border(1.dp, Color(0x40FFFFFF), RoundedCornerShape(radius))
+    .background(Color(0x6B101418))
+    .border(1.dp, Color(0x55FFFFFF), RoundedCornerShape(radius))
 
 
 /** 记录页：像聊天窗口一样的发布流，一条左一条右。 */
@@ -1429,23 +1438,20 @@ fun RecordFeedScreen(
     busy: Boolean,
     message: String,
     onRefresh: () -> Unit,
+    onGuide: () -> Unit,
     onRecord: () -> Unit
     ) {
     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "吃过什么，都在这儿",
-                fontSize = 12.sp,
-                color = MaterialTheme.colorScheme.outline,
-                modifier = Modifier.weight(1f)
-            )
-            TextButton(onClick = onRefresh, enabled = !busy) { Text("刷新", fontSize = 12.sp) }
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = onGuide, enabled = !busy) { Text("怎么用", fontSize = 14.sp) }
+            TextButton(onClick = onRefresh, enabled = !busy) { Text("刷新", fontSize = 14.sp) }
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (meals.isEmpty()) {
                 Text(
                     "还没有记录。点下面的按钮，记下这一顿。",
-                    fontSize = 13.sp,
+                    fontSize = 15.sp,
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.align(Alignment.Center)
                 )
@@ -1465,7 +1471,7 @@ fun RecordFeedScreen(
         if (message.isNotBlank()) {
             Text(
                 message,
-                fontSize = 12.sp,
+                fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(bottom = 4.dp)
             )
@@ -1475,7 +1481,7 @@ fun RecordFeedScreen(
             onClick = onRecord,
             enabled = !busy,
             modifier = Modifier.fillMaxWidth().height(50.dp)
-        ) { Text("发布这一餐", fontSize = 15.sp) }
+        ) { Text("发布这一餐", fontSize = 17.sp) }
         Spacer(Modifier.height(8.dp))
     }
 }
@@ -1493,7 +1499,7 @@ private fun MealBubble(meal: Meal, rightSide: Boolean) {
         ) {
             Text(
                 "${friendlyDateTime(meal.eaten_at)} · ${slotLabel(meal.meal_slot)}",
-                fontSize = 11.sp,
+                fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.outline
             )
             Spacer(Modifier.height(3.dp))
@@ -1504,20 +1510,20 @@ private fun MealBubble(meal: Meal, rightSide: Boolean) {
             if (dishes.isNotEmpty()) {
                 Text(
                     dishes.joinToString("、"),
-                    fontSize = 14.sp,
+                    fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold
                 )
                 Spacer(Modifier.height(2.dp))
             }
             Text(
                 meal.items.joinToString("、") { it.food_name },
-                fontSize = 12.sp,
+                fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.outline
             )
             Spacer(Modifier.height(3.dp))
-            Text(energyText(meal), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+            Text(energyText(meal), fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
             if (meal.note.isNotBlank()) {
-                Text("备注：${meal.note}", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+                Text("备注：${meal.note}", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
             }
         }
     }
@@ -1537,18 +1543,18 @@ private fun PreferenceConfirmRow(
         Modifier.fillMaxWidth().padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("爱好", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.width(36.dp))
-        Text(item.keyword, fontSize = 14.sp, modifier = Modifier.weight(1f))
+        Text("爱好", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.width(36.dp))
+        Text(item.keyword, fontSize = 16.sp, modifier = Modifier.weight(1f))
         Text(
             starText(stars),
-            fontSize = 14.sp,
+            fontSize = 16.sp,
             color = Color(0xFFE8D9B0),
             modifier = Modifier.padding(end = 4.dp).clickable {
                 stars = if (stars >= 5.0) 1.0 else stars + 1.0
             }
         )
-        TextButton(onClick = { onConfirm(item, stars) }) { Text("确定", fontSize = 12.sp) }
-        TextButton(onClick = { onReject(item) }) { Text("拒绝", fontSize = 12.sp) }
+        TextButton(onClick = { onConfirm(item, stars) }) { Text("确定", fontSize = 14.sp) }
+        TextButton(onClick = { onReject(item) }) { Text("拒绝", fontSize = 14.sp) }
     }
 }
 
@@ -1564,16 +1570,16 @@ private fun RestrictionConfirmRow(
         Modifier.fillMaxWidth().padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("忌口", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.width(36.dp))
-        Text(item.keyword, fontSize = 14.sp, modifier = Modifier.weight(1f))
+        Text("忌口", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline, modifier = Modifier.width(36.dp))
+        Text(item.keyword, fontSize = 16.sp, modifier = Modifier.weight(1f))
         Text(
             "完全不能接受",
-            fontSize = 11.sp,
+            fontSize = 13.sp,
             color = MaterialTheme.colorScheme.outline,
             modifier = Modifier.padding(end = 4.dp)
         )
-        TextButton(onClick = { onConfirm(item) }) { Text("确定", fontSize = 12.sp) }
-        TextButton(onClick = { onReject(item) }) { Text("拒绝", fontSize = 12.sp) }
+        TextButton(onClick = { onConfirm(item) }) { Text("确定", fontSize = 14.sp) }
+        TextButton(onClick = { onReject(item) }) { Text("拒绝", fontSize = 14.sp) }
     }
 }
 
@@ -1601,10 +1607,10 @@ fun RecommendScreen(
                 Card(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                     Column(Modifier.padding(12.dp)) {
                         Text(plan.title, fontWeight = FontWeight.SemiBold)
-                        Text(plan.items.joinToString("、") { it.food_name }, fontSize = 14.sp)
+                        Text(plan.items.joinToString("、") { it.food_name }, fontSize = 16.sp)
                         Text("约 ${plan.energy_kcal_estimate.toInt()} kcal", color = MaterialTheme.colorScheme.outline)
                         if (plan.reason.isNotBlank()) {
-                            Text(plan.reason, fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                            Text(plan.reason, fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
                         }
                     }
                 }
@@ -1652,7 +1658,7 @@ fun ReportScreen(
                 Column {
                     Text(
                         "改完立刻生效，之后的推荐按新的程度来。",
-                        fontSize = 12.sp,
+                        fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.outline
                     )
                     Spacer(Modifier.height(12.dp))
@@ -1671,7 +1677,7 @@ fun ReportScreen(
         LazyColumn(Modifier.weight(1f)) {
             if (report == null) {
                 item {
-                    Text("还没有报告。", color = MaterialTheme.colorScheme.outline, fontSize = 13.sp)
+                    Text("还没有报告。", color = MaterialTheme.colorScheme.outline, fontSize = 15.sp)
                 }
             } else {
                 item {
@@ -1686,7 +1692,7 @@ fun ReportScreen(
                 if (report.top_foods.isNotEmpty()) {
                     item {
                         Spacer(Modifier.height(16.dp))
-                        Text("最常吃", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text("最常吃", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(8.dp))
                         TopFoodBars(report.top_foods.take(6))
                     }
@@ -1697,23 +1703,23 @@ fun ReportScreen(
                         Text(
                             "需要补充：${report.gaps.joinToString("、")}",
                             color = MaterialTheme.colorScheme.primary,
-                            fontSize = 13.sp
+                            fontSize = 15.sp
                         )
                     }
                 }
                 item {
                     Spacer(Modifier.height(8.dp))
-                    Text(report.note, fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                    Text(report.note, fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
                 }
                 // 忌口是唯一长期保留的饮食约束（口味会变，只在当前对话里生效）
                 val avoids = profile?.restrictions.orEmpty()
                 if (avoids.isNotEmpty()) {
                     item {
                         Spacer(Modifier.height(14.dp))
-                        Text("忌口", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text("忌口", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                         Text(
                             "按程度来：不太喜欢的少推，很难吃和完全不接受的不进推荐",
-                            fontSize = 11.sp,
+                            fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.outline
                         )
                     }
@@ -1724,11 +1730,11 @@ fun ReportScreen(
                         ) {
                             Text(
                                 "忌口",
-                                fontSize = 11.sp,
+                                fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.outline,
                                 modifier = Modifier.width(36.dp)
                             )
-                            Text(item.keyword, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                            Text(item.keyword, fontSize = 15.sp, modifier = Modifier.weight(1f))
                             LevelChip(
                                 restrictionLevelText(item.level),
                                 restrictionDotColor(restrictionLevel(item.level))
@@ -1747,10 +1753,10 @@ fun ReportScreen(
                 if (likes.isNotEmpty()) {
                     item {
                         Spacer(Modifier.height(14.dp))
-                        Text("爱好", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text("爱好", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                         Text(
                             "爱吃的程度也分三档，之后的推荐会优先照顾",
-                            fontSize = 11.sp,
+                            fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.outline
                         )
                     }
@@ -1761,11 +1767,11 @@ fun ReportScreen(
                         ) {
                             Text(
                                 "爱好",
-                                fontSize = 11.sp,
+                                fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.outline,
                                 modifier = Modifier.width(36.dp)
                             )
-                            Text(item.keyword, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                            Text(item.keyword, fontSize = 15.sp, modifier = Modifier.weight(1f))
                             LevelChip(
                                 preferenceLevelText(item.weight),
                                 preferenceDotColor(preferenceLevel(item.weight))
@@ -1806,11 +1812,11 @@ private fun LevelChip(text: String, dotColor: Color, onClick: () -> Unit) {
         )
         Text(
             text,
-            fontSize = 11.sp,
+            fontSize = 13.sp,
             color = Color(0xE6FFFFFF),
             modifier = Modifier.padding(start = 5.dp)
         )
-        Text(" ⌄", fontSize = 11.sp, color = Color(0x99FFFFFF))
+        Text(" ⌄", fontSize = 13.sp, color = Color(0x99FFFFFF))
     }
 }
 
@@ -1913,26 +1919,26 @@ fun RecordDialog(
                         photos.isEmpty() -> "可以不加照片，纯文字也能记"
                         else -> "已选 ${photos.size} 张（最多 $MAX_PHOTOS 张）"
                     },
-                    fontSize = 12.sp,
+                    fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.outline
                 )
                 photos.forEachIndexed { index, photo ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         PhotoThumb(photo.base64)
                         Spacer(Modifier.width(8.dp))
-                        Text("照片 ${index + 1}", fontSize = 13.sp, modifier = Modifier.weight(1f))
+                        Text("照片 ${index + 1}", fontSize = 15.sp, modifier = Modifier.weight(1f))
                         TextButton(onClick = { removePhoto(index) }) { Text("移除") }
                     }
                 }
                 Spacer(Modifier.height(8.dp))
-                Text("哪一天", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                Text("哪一天", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
                 Row(Modifier.fillMaxWidth()) {
                     ChoiceItem("今天", daysAgo == 0, { daysAgo = 0 }, Modifier.weight(1f))
                     ChoiceItem("昨天", daysAgo == 1, { daysAgo = 1 }, Modifier.weight(1f))
                     ChoiceItem("前天", daysAgo == 2, { daysAgo = 2 }, Modifier.weight(1f))
                 }
                 Spacer(Modifier.height(4.dp))
-                Text("哪一餐", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                Text("哪一餐", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
                 Row(Modifier.fillMaxWidth()) {
                     ChoiceItem("早餐", slot == "breakfast", { slot = "breakfast" }, Modifier.weight(1f))
                     ChoiceItem("午餐", slot == "lunch", { slot = "lunch" }, Modifier.weight(1f))
@@ -2028,7 +2034,7 @@ fun HistoryScreen(
             OutlinedButton(onClick = onRefresh, enabled = !busy, modifier = Modifier.weight(1f)) { Text("刷新") }
         }
         Spacer(Modifier.height(6.dp))
-        Text("可补录今天、昨天、前天；记录只能编辑，不提供删除", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+        Text("可补录今天、昨天、前天；记录只能编辑，不提供删除", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
         Spacer(Modifier.height(8.dp))
         if (grouped.isEmpty()) {
             Text("还没有记录", color = MaterialTheme.colorScheme.outline)
@@ -2052,16 +2058,16 @@ fun HistoryScreen(
                                     Text(slotLabel(meal.meal_slot), fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                                     TextButton(onClick = { onEdit(meal) }) { Text("编辑") }
                                 }
-                                Text(meal.items.joinToString("、") { it.food_name }, fontSize = 14.sp)
+                                Text(meal.items.joinToString("、") { it.food_name }, fontSize = 16.sp)
                                 val dayDishes = meal.items
                                     .mapNotNull { it.dish_name?.trim()?.takeIf { name -> name.isNotBlank() } }
                                     .distinct()
                                 if (dayDishes.isNotEmpty()) {
-                                    Text(dayDishes.joinToString("、"), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                    Text(dayDishes.joinToString("、"), fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                                 }
                                 Text(energyText(meal), color = MaterialTheme.colorScheme.outline)
                                 if (meal.note.isNotBlank()) {
-                                    Text("备注：${meal.note}", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                                    Text("备注：${meal.note}", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
                                 }
                             }
                         }

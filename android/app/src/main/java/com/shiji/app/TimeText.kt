@@ -11,12 +11,12 @@ import java.util.TimeZone
  * 这里统一转成本机时区再展示，避免出现"凌晨吃的东西算到前一天"。
  */
 
-private val ISO_PARSER = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
-    timeZone = TimeZone.getTimeZone("UTC")
-}
-
 private fun parseIso(iso: String): Date? = try {
-    ISO_PARSER.parse(iso.take(19))
+    val value = iso.trim()
+    val normalized = if (value.length >= 19) value.take(19) else value
+    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).apply {
+        timeZone = TimeZone.getTimeZone("UTC")
+    }.parse(normalized)
 } catch (e: Exception) {
     null
 }
@@ -53,6 +53,12 @@ fun friendlyDayTitle(dateKey: String): String {
 fun localClock(iso: String): String {
     val date = parseIso(iso) ?: return iso.drop(11).take(5)
     return format("HH:mm", Locale.US, date)
+}
+
+/** 广场、分享列表用的短时间：本机时区 MM-dd HH:mm。 */
+fun localShortDateTime(iso: String): String {
+    val date = parseIso(iso) ?: return iso.take(16).replace("T", " ")
+    return format("MM-dd HH:mm", Locale.US, date)
 }
 
 /** 本机时区下的日期 + 时间，形如「今天 12:30」。 */

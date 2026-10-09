@@ -69,26 +69,26 @@ fun PrivacyScreen() {
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 10.dp)
     ) {
-        Text("随便吃 · 隐私政策", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+        Text("随便吃 · 隐私政策", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(4.dp))
         Text(
             "更新日期：$PRIVACY_UPDATED_AT",
-            fontSize = 12.sp,
+            fontSize = 14.sp,
             color = MaterialTheme.colorScheme.outline
         )
         Spacer(Modifier.height(10.dp))
         Text(
             "我们只收集让“随便吃”能正常工作的信息，下面逐条说明收集什么、用来干什么、你可以怎么管理。",
-            fontSize = 13.sp,
+            fontSize = 15.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         PRIVACY_SECTIONS.forEach { (title, body) ->
             Spacer(Modifier.height(14.dp))
-            Text(title, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(4.dp))
             Text(
                 body,
-                fontSize = 13.sp,
+                fontSize = 15.sp,
                 lineHeight = 20.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -111,7 +111,7 @@ fun PrivacyPage(onBack: () -> Unit) {
                 IconButton(onClick = onBack) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                 }
-                Text("隐私政策", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                Text("隐私政策", fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
             }
             PrivacyScreen()
         }

@@ -73,6 +73,7 @@ fun ProfilePage(
     onChangeCode: (String) -> Unit,
     // 手动检查更新
     onCheckUpdate: () -> Unit,
+    onOpenGuide: () -> Unit,
     onLogout: () -> Unit,
     onDeleteAccount: () -> Unit,
     onOpenPrivacy: () -> Unit
@@ -96,7 +97,7 @@ fun ProfilePage(
                 Column {
                     Text(
                         "选一个，好友和朋友圈里都会显示它。",
-                        fontSize = 12.sp,
+                        fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.outline
                     )
                     Spacer(Modifier.height(14.dp))
@@ -134,7 +135,7 @@ fun ProfilePage(
                 Column {
                     Text(
                         "6 位，只能用数字和小写字母。注意：只能改这一次，改完就锁死，旧 ID 立刻失效。",
-                        fontSize = 12.sp,
+                        fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.outline
                     )
                     Spacer(Modifier.height(10.dp))
@@ -189,7 +190,7 @@ fun ProfilePage(
                 Column(Modifier.weight(1f)) {
                     Text(
                         profile?.name?.takeIf { it.isNotBlank() } ?: "还没有名字",
-                        fontSize = 18.sp,
+                        fontSize = 20.sp,
                         fontWeight = FontWeight.SemiBold
                     )
                     Spacer(Modifier.height(2.dp))
@@ -198,7 +199,7 @@ fun ProfilePage(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             "ID：${profile?.code?.ifBlank { null } ?: "-"}",
-                            fontSize = 12.sp,
+                            fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.outline
                         )
                         Spacer(Modifier.width(2.dp))
@@ -229,15 +230,15 @@ fun ProfilePage(
                     }
                     val phoneText = profile?.phone.orEmpty()
                     if (phoneText.isNotBlank()) {
-                        Text(phoneText, fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                        Text(phoneText, fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
                     }
                 }
-                TextButton(onClick = { editing = true }, enabled = !busy) { Text("编辑", fontSize = 13.sp) }
+                TextButton(onClick = { editing = true }, enabled = !busy) { Text("编辑", fontSize = 15.sp) }
             }
             Spacer(Modifier.height(10.dp))
             Text(
                 profile?.signature?.takeIf { it.isNotBlank() } ?: "写一句个性签名吧",
-                fontSize = 13.sp,
+                fontSize = 15.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -261,7 +262,7 @@ fun ProfilePage(
         Spacer(Modifier.height(16.dp))
         SectionTitle("账号")
         OutlinedButton(onClick = onLogout, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-            Text("退出登录", fontSize = 13.sp)
+            Text("退出登录", fontSize = 15.sp)
         }
         Spacer(Modifier.height(8.dp))
         OutlinedButton(
@@ -270,11 +271,11 @@ fun ProfilePage(
             modifier = Modifier.fillMaxWidth(),
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.error)
         ) {
-            Text("注销账号", fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
+            Text("注销账号", fontSize = 15.sp, color = MaterialTheme.colorScheme.error)
         }
         Text(
             "注销会删除你的全部记录、档案、忌口爱好和设备登录信息，无法恢复。",
-            fontSize = 11.sp,
+            fontSize = 13.sp,
             color = MaterialTheme.colorScheme.outline,
             modifier = Modifier.padding(top = 6.dp)
         )
@@ -289,10 +290,10 @@ fun ProfilePage(
                 .padding(vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("检查更新", fontSize = 13.sp, modifier = Modifier.weight(1f))
+            Text("检查更新", fontSize = 15.sp, modifier = Modifier.weight(1f))
             Text(
                 "v" + BuildConfig.VERSION_NAME,
-                fontSize = 12.sp,
+                fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.outline
             )
         }
@@ -304,19 +305,31 @@ fun ProfilePage(
                 .padding(vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("隐私政策", fontSize = 13.sp, modifier = Modifier.weight(1f))
-            Text("›", fontSize = 16.sp, color = MaterialTheme.colorScheme.outline)
+            Text("隐私政策", fontSize = 15.sp, modifier = Modifier.weight(1f))
+            Text("›", fontSize = 18.sp, color = MaterialTheme.colorScheme.outline)
+        }
+
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .clickable { onOpenGuide() }
+                .padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("使用说明", fontSize = 15.sp, modifier = Modifier.weight(1f))
+            Text("›", fontSize = 18.sp, color = MaterialTheme.colorScheme.outline)
         }
 
         if (message.isNotBlank()) {
             Spacer(Modifier.height(12.dp))
-            Text(message, color = MaterialTheme.colorScheme.primary, fontSize = 13.sp)
+            Text(message, color = MaterialTheme.colorScheme.primary, fontSize = 15.sp)
         }
         // 右下角版本号
         Spacer(Modifier.height(18.dp))
         Text(
             "v" + BuildConfig.VERSION_NAME,
-            fontSize = 11.sp,
+            fontSize = 13.sp,
             color = MaterialTheme.colorScheme.outline,
             modifier = Modifier.align(Alignment.End)
         )
@@ -354,12 +367,12 @@ fun ProfilePage(
 /** 毛玻璃面板：半透明底 + 细边。 */
 private fun Modifier.glassPanel(radius: androidx.compose.ui.unit.Dp = 18.dp): Modifier = this
     .clip(RoundedCornerShape(radius))
-    .background(Color(0x2EFFFFFF))
-    .border(1.dp, Color(0x40FFFFFF), RoundedCornerShape(radius))
+    .background(Color(0x66101418))
+    .border(1.dp, Color(0x55FFFFFF), RoundedCornerShape(radius))
 
 @Composable
 private fun SectionTitle(text: String) {
-    Text(text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 6.dp))
+    Text(text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 6.dp))
 }
 
 
@@ -367,8 +380,8 @@ private fun SectionTitle(text: String) {
 @Composable
 private fun InfoRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, fontSize = 13.sp, modifier = Modifier.width(72.dp))
-        Text(value, fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
+        Text(label, fontSize = 15.sp, modifier = Modifier.width(72.dp))
+        Text(value, fontSize = 15.sp, color = MaterialTheme.colorScheme.outline)
     }
 }
 
@@ -423,7 +436,7 @@ private fun EditProfileDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(8.dp))
-                Text("性别", fontSize = 13.sp)
+                Text("性别", fontSize = 15.sp)
                 Row(Modifier.fillMaxWidth()) {
                     ChoiceItem("男", gender == "male", { gender = "male" }, Modifier.weight(1f))
                     ChoiceItem("女", gender == "female", { gender = "female" }, Modifier.weight(1f))
@@ -447,15 +460,15 @@ private fun PermissionRow(
         Modifier.fillMaxWidth().padding(vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, fontSize = 13.sp, modifier = Modifier.width(72.dp))
+        Text(label, fontSize = 15.sp, modifier = Modifier.width(72.dp))
         Text(
             status,
-            fontSize = 12.sp,
+            fontSize = 14.sp,
             color = if (ok) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
             modifier = Modifier.weight(1f)
         )
         if (showSettings) {
-            OutlinedButton(onClick = { openAppSettings(context) }) { Text("去设置", fontSize = 12.sp) }
+            OutlinedButton(onClick = { openAppSettings(context) }) { Text("去设置", fontSize = 14.sp) }
         }
     }
 }

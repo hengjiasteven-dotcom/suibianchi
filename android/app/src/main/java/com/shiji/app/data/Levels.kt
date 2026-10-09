@@ -103,7 +103,7 @@ fun LevelPicker(
                 )
                 Text(
                     label,
-                    fontSize = 11.sp,
+                    fontSize = 13.sp,
                     maxLines = 1,
                     softWrap = false,
                     fontWeight = if (picked) FontWeight.SemiBold else FontWeight.Normal,

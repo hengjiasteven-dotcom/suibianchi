@@ -65,8 +65,8 @@ sealed interface SquareRoute {
     data class Chat(val friend: FriendCard) : SquareRoute
 }
 
-private val PanelFill = Color(0x2EFFFFFF)
-private val PanelBorder = Color(0x40FFFFFF)
+private val PanelFill = Color(0x66101418)
+private val PanelBorder = Color(0x55FFFFFF)
 
 private fun Modifier.glassPanel(radius: Dp = 16.dp): Modifier = this
     .clip(RoundedCornerShape(radius))
@@ -81,12 +81,6 @@ private fun slotLabel(slot: String): String = when (slot) {
     else -> "一餐"
 }
 
-/** 把 ISO 时间压成 "10-09 12:30"，广场里够用了。 */
-private fun shortTime(iso: String): String {
-    val date = iso.take(10)
-    val time = iso.drop(11).take(5)
-    return if (date.length == 10 && time.length == 5) "${date.substring(5)} $time" else iso.take(16)
-}
 
 private fun displayName(card: FriendCard?): String {
     val name = card?.name.orEmpty().trim()
@@ -102,7 +96,7 @@ fun ShareCardBody(post: FeedPost) {
         if (payload.type == "weekly") {
             Text(
                 payload.title ?: "最近 7 天食物类别占比",
-                fontSize = 12.sp,
+                fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.outline
             )
             Spacer(Modifier.height(8.dp))
@@ -110,16 +104,24 @@ fun ShareCardBody(post: FeedPost) {
         } else {
             val meals = payload.meals
             if (meals.isEmpty()) {
-                Text("这一餐没有记录", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
+                Text("这一餐没有记录", fontSize = 15.sp, color = MaterialTheme.colorScheme.outline)
             } else {
                 meals.forEach { meal ->
                     Row(Modifier.padding(vertical = 3.dp)) {
-                        Text(
-                            slotLabel(meal.meal_slot),
-                            fontSize = 12.sp,
-                            color = Color(0xFFE8D9B0),
-                            modifier = Modifier.width(40.dp)
-                        )
+                        Column(Modifier.width(54.dp)) {
+                            Text(
+                                slotLabel(meal.meal_slot),
+                                fontSize = 14.sp,
+                                color = Color(0xFFE8D9B0)
+                            )
+                            if (meal.eaten_at.isNotBlank()) {
+                                Text(
+                                    localShortDateTime(meal.eaten_at),
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.outline
+                                )
+                            }
+                        }
                         Column {
                             // 餐名放第一行：一餐的主语是吃了什么菜，不是食材清单
                             val dishText = meal.dishes.joinToString("、")
@@ -127,7 +129,7 @@ fun ShareCardBody(post: FeedPost) {
                                 dishText.ifEmpty {
                                     meal.foods.firstOrNull() ?: "（没写具体内容）"
                                 },
-                                fontSize = 14.sp,
+                                fontSize = 16.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = Color(0xE6FFFFFF)
                             )
@@ -137,7 +139,7 @@ fun ShareCardBody(post: FeedPost) {
                                 Spacer(Modifier.height(2.dp))
                                 Text(
                                     rest.joinToString("、"),
-                                    fontSize = 12.sp,
+                                    fontSize = 14.sp,
                                     color = MaterialTheme.colorScheme.outline
                                 )
                             }
@@ -170,13 +172,13 @@ fun ShareCardBody(post: FeedPost) {
 @Composable
 private fun CategoryBars(shares: List<CategoryShare>) {
     if (shares.isEmpty()) {
-        Text("这周还没有记录", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
+        Text("这周还没有记录", fontSize = 15.sp, color = MaterialTheme.colorScheme.outline)
         return
     }
     Column {
         shares.take(6).forEach { item ->
             Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(item.category, fontSize = 12.sp, modifier = Modifier.width(96.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(item.category, fontSize = 14.sp, modifier = Modifier.width(96.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Box(
                     Modifier
                         .weight(1f)
@@ -194,7 +196,7 @@ private fun CategoryBars(shares: List<CategoryShare>) {
                 }
                 Text(
                     "${item.percent}%",
-                    fontSize = 11.sp,
+                    fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.width(48.dp),
                     maxLines = 1
@@ -232,7 +234,7 @@ fun SquareHomeScreen(
                 Column {
                     Text(
                         "输入对方的 6 位用户码（字母和数字）。你自己的码在个人主页。",
-                        fontSize = 12.sp,
+                        fontSize = 14.sp,
                         color = MaterialTheme.colorScheme.outline
                     )
                     Spacer(Modifier.height(10.dp))
@@ -285,8 +287,8 @@ fun SquareHomeScreen(
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("朋友圈", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                Text("所有人分享的餐食都在这里", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+                Text("朋友圈", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                Text("所有人分享的餐食都在这里", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
             }
             if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
         }
@@ -295,7 +297,7 @@ fun SquareHomeScreen(
 
         // 谁申请加我：一行提醒，就地接受或拒绝
         if (requests.isNotEmpty()) {
-            Text("好友申请", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text("好友申请", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(4.dp))
             requests.forEach { req ->
                 Row(
@@ -309,31 +311,31 @@ fun SquareHomeScreen(
                     UserAvatar(req.from.avatar, displayName(req.from), 36.dp)
                     Spacer(Modifier.width(10.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(displayName(req.from), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                        Text(displayName(req.from), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                         Text(
                             "申请加你为好友 · ID ${req.from.code}",
-                            fontSize = 11.sp,
+                            fontSize = 13.sp,
                             color = MaterialTheme.colorScheme.outline,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                     }
                     TextButton(onClick = { onRejectRequest(req.request_id) }) {
-                        Text("拒绝", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                        Text("拒绝", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
                     }
                     TextButton(onClick = { onAcceptRequest(req.request_id) }) {
-                        Text("接受", fontSize = 12.sp)
+                        Text("接受", fontSize = 14.sp)
                     }
                 }
             }
             Spacer(Modifier.height(16.dp))
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("好友", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Text("好友", fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             TextButton(onClick = { showAdd = true }) {
                 Icon(Icons.Filled.PersonAdd, contentDescription = null, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("加好友", fontSize = 13.sp)
+                Text("加好友", fontSize = 15.sp)
             }
         }
         Spacer(Modifier.height(4.dp))
@@ -341,7 +343,7 @@ fun SquareHomeScreen(
         if (friends.isEmpty()) {
             Text(
                 "还没有好友。点右上「加好友」，填对方的 6 位用户码就行。",
-                fontSize = 13.sp,
+                fontSize = 15.sp,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.padding(vertical = 12.dp)
             )
@@ -360,16 +362,16 @@ fun SquareHomeScreen(
                         UserAvatar(friend.avatar, displayName(friend), 38.dp)
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(displayName(friend), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                            Text(displayName(friend), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                             Text(
                                 friend.signature.ifBlank { "ID ${friend.code}" },
-                                fontSize = 11.sp,
+                                fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.outline,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
-                        Text("›", fontSize = 18.sp, color = MaterialTheme.colorScheme.outline)
+                        Text("›", fontSize = 20.sp, color = MaterialTheme.colorScheme.outline)
                     }
                 }
             }
@@ -391,10 +393,10 @@ fun MomentsScreen(
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Button(onClick = { onShare("latest") }, modifier = Modifier.weight(1f)) {
-                Text("分享最近一餐", fontSize = 13.sp, maxLines = 1)
+                Text("分享最近一餐", fontSize = 15.sp, maxLines = 1)
             }
             Button(onClick = { onShare("weekly") }, modifier = Modifier.weight(1f)) {
-                Text("分享本周报告", fontSize = 13.sp, maxLines = 1)
+                Text("分享本周报告", fontSize = 15.sp, maxLines = 1)
             }
         }
         if (busy) {
@@ -406,7 +408,7 @@ fun MomentsScreen(
 
         if (posts.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("还没有人分享，你可以做第一个。", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
+                Text("还没有人分享，你可以做第一个。", fontSize = 15.sp, color = MaterialTheme.colorScheme.outline)
             }
         } else {
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -424,13 +426,13 @@ private fun FeedPostCard(post: FeedPost, onAvatarClick: (FriendCard) -> Unit) {
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(displayName(post.author), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text(displayName(post.author), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 if (post.mine) {
                     Spacer(Modifier.width(6.dp))
-                    Text("我", fontSize = 10.sp, color = Color(0xFFE8D9B0))
+                    Text("我", fontSize = 12.sp, color = Color(0xFFE8D9B0))
                 }
                 Spacer(Modifier.weight(1f))
-                Text(shortTime(post.created_at), fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+                Text(localShortDateTime(post.created_at), fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
             }
             Spacer(Modifier.height(8.dp))
             ShareCardBody(post)
@@ -461,10 +463,10 @@ fun FriendChatScreen(
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回", modifier = Modifier.size(22.dp))
             }
-            Text(displayName(friend), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+            Text(displayName(friend), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.width(8.dp))
             // 显示 6 位对外码；对方改名后这里会跟着变
-            Text("ID ${friend.code}", fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+            Text("ID ${friend.code}", fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
             Spacer(Modifier.weight(1f))
             if (busy) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
         }
@@ -473,7 +475,7 @@ fun FriendChatScreen(
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Text(
                     "还没有互相分享过。\n下面可以把今天吃的或这周占比发过去。",
-                    fontSize = 13.sp,
+                    fontSize = 15.sp,
                     color = MaterialTheme.colorScheme.outline
                 )
             }
@@ -494,10 +496,10 @@ fun FriendChatScreen(
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Button(onClick = { onShare("latest") }, modifier = Modifier.weight(1f)) {
-                Text("分享今天吃的", fontSize = 13.sp, maxLines = 1)
+                Text("分享今天吃的", fontSize = 15.sp, maxLines = 1)
             }
             Button(onClick = { onShare("weekly") }, modifier = Modifier.weight(1f)) {
-                Text("分享一周占比", fontSize = 13.sp, maxLines = 1)
+                Text("分享一周占比", fontSize = 15.sp, maxLines = 1)
             }
         }
     }
@@ -517,9 +519,9 @@ private fun ChatBubble(post: FeedPost) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 UserAvatar(post.author.avatar, displayName(post.author), 22.dp)
                 Spacer(Modifier.width(6.dp))
-                Text(displayName(post.author), fontSize = 11.sp, color = MaterialTheme.colorScheme.outline)
+                Text(displayName(post.author), fontSize = 13.sp, color = MaterialTheme.colorScheme.outline)
                 Spacer(Modifier.weight(1f))
-                Text(shortTime(post.created_at), fontSize = 10.sp, color = MaterialTheme.colorScheme.outline)
+                Text(localShortDateTime(post.created_at), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
             }
             Spacer(Modifier.height(6.dp))
             ShareCardBody(post)
@@ -548,11 +550,11 @@ fun UserCardDialog(
                 UserAvatar(card.avatar, displayName(card), 42.dp)
                 Spacer(Modifier.width(12.dp))
                 Column {
-                    Text(displayName(card), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    Text(displayName(card), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             "ID：${card.code}",
-                            fontSize = 12.sp,
+                            fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.outline
                         )
                         Spacer(Modifier.width(2.dp))
@@ -572,7 +574,7 @@ fun UserCardDialog(
                             )
                         }
                         if (copied) {
-                            Text("已复制", fontSize = 10.sp, color = Color(0xFFE8D9B0))
+                            Text("已复制", fontSize = 12.sp, color = Color(0xFFE8D9B0))
                         }
                     }
                 }
@@ -581,7 +583,7 @@ fun UserCardDialog(
         text = {
             Column(Modifier.heightIn(max = 220.dp)) {
                 if (card.signature.isNotBlank()) {
-                    Text(card.signature, fontSize = 13.sp)
+                    Text(card.signature, fontSize = 15.sp)
                     Spacer(Modifier.height(6.dp))
                 }
                 Text(
@@ -594,7 +596,7 @@ fun UserCardDialog(
                             else -> null
                         }
                     ).joinToString(" · ").ifBlank { "没有更多公开信息" },
-                    fontSize = 12.sp,
+                    fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.outline
                 )
             }

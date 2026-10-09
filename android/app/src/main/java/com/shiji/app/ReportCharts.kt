@@ -79,8 +79,8 @@ fun CategoryShareChart(shares: List<CategoryShare>, total: Int, modifier: Modifi
                 Modifier.align(Alignment.Center),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("$total", fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                Text("条食材", fontSize = 10.sp, color = MaterialTheme.colorScheme.outline)
+                Text("$total", fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Text("条食材", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
             }
         }
         Spacer(Modifier.width(12.dp))
@@ -96,12 +96,12 @@ fun CategoryShareChart(shares: List<CategoryShare>, total: Int, modifier: Modifi
                     Spacer(Modifier.width(6.dp))
                     Text(
                         share.category,
-                        fontSize = 12.sp,
+                        fontSize = 14.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
-                    Text("${share.percent}%", fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
+                    Text("${share.percent}%", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
                 }
             }
         }
@@ -117,7 +117,7 @@ fun TopFoodBars(foods: List<TopFood>, modifier: Modifier = Modifier) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     food.name,
-                    fontSize = 12.sp,
+                    fontSize = 14.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.width(78.dp)
@@ -127,7 +127,7 @@ fun TopFoodBars(foods: List<TopFood>, modifier: Modifier = Modifier) {
                         .weight(1f)
                         .height(12.dp)
                         .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0x1FFFFFFF))
+                        .background(Color(0x2EFFFFFF))
                 ) {
                     Box(
                         Modifier
@@ -139,7 +139,7 @@ fun TopFoodBars(foods: List<TopFood>, modifier: Modifier = Modifier) {
                 }
                 Text(
                     "${food.count} 次",
-                    fontSize = 11.sp,
+                    fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.outline,
                     modifier = Modifier.padding(start = 8.dp)
                 )

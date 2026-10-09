@@ -244,6 +244,7 @@ data class SharedMeal(
     val meal_slot: String = "",
     val dishes: List<String> = emptyList(),
     val foods: List<String> = emptyList(),
+    val eaten_at: String = "",
     /** 分享里带的照片；服务端每次读取时现签，所以地址一直有效 */
     val photos: List<SharePhoto> = emptyList(),
     val meal_date: String? = null

@@ -21,8 +21,8 @@ android {
         minSdk = 24
         targetSdk = 34
         // 再发新版就把这两个数一起往上加（客户端靠 versionCode 判断要不要更新）
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.2.1"
         // 服务端地址：默认是模拟器访问宿主机的地址；真机/上线用
         //   gradlew assembleDebug -PapiBaseUrl=https://你的域名/  覆盖
         val apiBaseUrl = (project.findProperty("apiBaseUrl") as String?) ?: "http://10.0.2.2:8000/"

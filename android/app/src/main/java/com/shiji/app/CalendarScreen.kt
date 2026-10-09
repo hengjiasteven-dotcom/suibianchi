@@ -115,11 +115,11 @@ fun CalendarScreen(
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 "点格子看详情，双指一缩看整月",
-                fontSize = 12.sp,
+                fontSize = 14.sp,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.weight(1f)
             )
-            TextButton(onClick = onRefresh, enabled = !busy) { Text("刷新", fontSize = 12.sp) }
+            TextButton(onClick = onRefresh, enabled = !busy) { Text("刷新", fontSize = 14.sp) }
         }
         Spacer(Modifier.height(2.dp))
 
@@ -200,7 +200,7 @@ private fun WeekPager(
             // 月份：点一下进月视图
             Text(
                 SimpleDateFormat("yyyy 年 M 月", Locale.CHINA).format(weekMonth.time) + " ⌄",
-                fontSize = 13.sp,
+                fontSize = 15.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
@@ -222,10 +222,10 @@ private fun WeekPager(
                     ) {
                         Text(
                             SimpleDateFormat("d", Locale.CHINA).format(day.time),
-                            fontSize = 12.sp,
+                            fontSize = 14.sp,
                             fontWeight = if (isSameDay(day, today)) FontWeight.Bold else FontWeight.Normal
                         )
-                        Text(weekdayLabel(day).removePrefix("周"), fontSize = 10.sp, color = MaterialTheme.colorScheme.outline)
+                        Text(weekdayLabel(day).removePrefix("周"), fontSize = 12.sp, color = MaterialTheme.colorScheme.outline)
                     }
                 }
             }
@@ -278,7 +278,7 @@ private fun DayPager(
             SLOTS.forEach { (slot, label) ->
                 Row(Modifier.fillMaxWidth().height(rowHeight)) {
                     Box(Modifier.width(40.dp).fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(label, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Text(label, fontWeight = FontWeight.Bold, fontSize = 20.sp)
                     }
                     MealCell(
                         date = key,
@@ -322,7 +322,7 @@ private fun MonthPager(
             // 月份：点一下回周视图
             Text(
                 SimpleDateFormat("yyyy 年 M 月", Locale.CHINA).format(first.time) + " ⌃",
-                fontSize = 14.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier
                     .clip(RoundedCornerShape(20.dp))
@@ -335,7 +335,7 @@ private fun MonthPager(
                     Text(
                         label,
                         Modifier.weight(1f),
-                        fontSize = 11.sp,
+                        fontSize = 13.sp,
                         color = if (index >= 5) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
@@ -361,7 +361,7 @@ private fun MonthPager(
                                     .background(
                                         when {
                                             isTodayCell -> MaterialTheme.colorScheme.primaryContainer
-                                            c >= 5 -> Color(0x1FFFFFFF)
+                                            c >= 5 -> Color(0x2EFFFFFF)
                                             else -> MaterialTheme.colorScheme.surfaceVariant
                                         }
                                     )
@@ -371,14 +371,14 @@ private fun MonthPager(
                             ) {
                                 Text(
                                     "$dayNum",
-                                    fontSize = 13.sp,
+                                    fontSize = 15.sp,
                                     fontWeight = if (isTodayCell) FontWeight.Bold else FontWeight.Normal
                                 )
                                 // 节日用一行小字标在日期下面
                                 if (holiday != null) {
                                     Text(
                                         holiday,
-                                        fontSize = 9.sp,
+                                        fontSize = 11.sp,
                                         color = Color(0xFFE8D9B0),
                                         maxLines = 1
                                     )
@@ -386,7 +386,7 @@ private fun MonthPager(
                                 if (filled > 0) {
                                     Text(
                                         "$filled 餐",
-                                        fontSize = 9.sp,
+                                        fontSize = 11.sp,
                                         color = MaterialTheme.colorScheme.primary,
                                         maxLines = 1
                                     )
@@ -433,11 +433,11 @@ private fun MealCell(
     // 有记录：米黄色半透明块；未记录：几乎透明，不留黑面板
     val filled = meals.isNotEmpty()
     val panelColor = when {
-        filled -> Color(0x5CE8D9B0)
+        filled -> Color(0x7AE8D9B0)
         isToday -> Color(0x24FFFFFF)
-        else -> Color(0x14FFFFFF)
+        else -> Color(0x26FFFFFF)
     }
-    val contentColor = if (filled) Color(0xFF2A2114) else Color(0x99FFFFFF)
+    val contentColor = if (filled) Color(0xFF2A2114) else Color(0xCCFFFFFF)
     Box(
         modifier
             .padding(1.dp)
@@ -461,11 +461,11 @@ private fun MealCell(
                 verticalArrangement = Arrangement.Top
             ) {
                 if (meals.any { it.status == "estimating" }) {
-                    Text("估算中", fontSize = 9.sp, color = contentColor)
+                    Text("估算中", fontSize = 11.sp, color = contentColor)
                 } else {
                     Text(
                         firstName,
-                        fontSize = 9.sp,
+                        fontSize = 11.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         color = contentColor
@@ -502,7 +502,7 @@ private fun MealCell(
                 if (big) {
                     val note = meals.firstOrNull { it.note.isNotBlank() }?.note
                     if (!note.isNullOrBlank()) {
-                        Text("备注：$note", fontSize = 11.sp, color = contentColor.copy(alpha = 0.7f))
+                        Text("备注：$note", fontSize = 13.sp, color = contentColor.copy(alpha = 0.7f))
                     }
                 }
             }
