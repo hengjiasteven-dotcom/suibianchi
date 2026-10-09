@@ -322,6 +322,45 @@ def health():
     }
 
 
+def _read_release() -> Dict:
+    """读发版信息（server/release.json）。文件不存在或坏了都不报错，当没发过版。"""
+    try:
+        from .config import RELEASE_FILE
+
+        if not RELEASE_FILE.exists():
+            return {}
+        return json.loads(RELEASE_FILE.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+@app.get("/api/v1/app/version")
+def app_version():
+    """客户端检查更新：最新版本号 + 现签的下载地址。
+
+    不需登录也能看：更新提示要在登录页就能弹。下载地址指向七牛私有空间，
+    所以每次请求现签一次，有效期跟 QINIU_URL_TTL 一致。
+    """
+    info = _read_release()
+    if not info:
+        return {
+            "version_code": 0,
+            "version_name": "",
+            "notes": "",
+            "force": False,
+            "download_url": "",
+        }
+
+    key = (info.get("object_key") or "").strip()
+    return {
+        "version_code": int(info.get("version_code") or 0),
+        "version_name": info.get("version_name") or "",
+        "notes": info.get("notes") or "",
+        "force": bool(info.get("force")),
+        "download_url": services.public_url(key) if key else "",
+    }
+
+
 # ------------------------------------------------------------------ 认证
 
 def _client_ip(request: Request) -> str:

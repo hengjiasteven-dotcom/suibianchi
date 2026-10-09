@@ -71,6 +71,8 @@ fun ProfilePage(
     onPickAvatar: (String) -> Unit,
     // 改 6 位对外 ID
     onChangeCode: (String) -> Unit,
+    // 手动检查更新
+    onCheckUpdate: () -> Unit,
     onLogout: () -> Unit,
     onDeleteAccount: () -> Unit,
     onOpenPrivacy: () -> Unit
@@ -279,6 +281,21 @@ fun ProfilePage(
 
         Spacer(Modifier.height(16.dp))
         SectionTitle("设置")
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .clickable { onCheckUpdate() }
+                .padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("检查更新", fontSize = 13.sp, modifier = Modifier.weight(1f))
+            Text(
+                "v" + BuildConfig.VERSION_NAME,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.outline
+            )
+        }
         Row(
             Modifier
                 .fillMaxWidth()

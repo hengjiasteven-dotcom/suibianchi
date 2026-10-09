@@ -75,4 +75,7 @@ AI_DAILY_PER_USER = int(os.environ.get("SHIJI_AI_DAILY_PER_USER", 100))
 
 # 识别任务（里面存着上传图片的 base64）保留多少天，超期就删
 RECOGNITION_KEEP_DAYS = int(os.environ.get("SHIJI_RECOGNITION_KEEP_DAYS", "7"))
+
+# 客户端版本信息：发版脚本 tools/publish_apk.py 会更新这个文件
+RELEASE_FILE = Path(os.environ.get("SHIJI_RELEASE_FILE", BASE_DIR / "release.json"))
 AI_DAILY_TOTAL = int(os.environ.get("SHIJI_AI_DAILY_TOTAL", 2000))

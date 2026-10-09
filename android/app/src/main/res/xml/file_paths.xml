@@ -2,4 +2,6 @@
 <paths>
     <!-- 拍照临时文件放应用缓存目录，通过 FileProvider 授权给相机应用写入 -->
     <cache-path name="photos" path="photos/" />
+    <!-- 新版本安装包下到这里，再通过 FileProvider 交给系统安装器 -->
+    <cache-path name="updates" path="updates/" />
 </paths>

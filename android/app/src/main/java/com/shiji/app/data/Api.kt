@@ -100,6 +100,10 @@ interface ShijiApi {
     suspend fun report(@Query("period") period: String): Report
 
     // 分享
+    /** 检查更新：拿服务端发布的最新版本。 */
+    @GET("api/v1/app/version")
+    suspend fun appVersion(): AppVersion
+
     // 对话式推荐：一次会话，退出即清空
     @POST("api/v1/chat/sessions")
     suspend fun chatStart(): ChatSessionResponse

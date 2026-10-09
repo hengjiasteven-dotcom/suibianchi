@@ -344,4 +344,13 @@ data class MomentRequest(val kind: String = "daily", val date: String? = null)
 
 data class MomentResponse(val post_id: String, val payload: SharePayload = SharePayload())
 
+/** 服务端发布的最新版本信息，用来提示用户更新。 */
+data class AppVersion(
+    val version_code: Int = 0,
+    val version_name: String = "",
+    val notes: String = "",
+    val force: Boolean = false,
+    val download_url: String = ""
+)
+
 data class NearbyResponse(val stores: List<StoreInfo> = emptyList())

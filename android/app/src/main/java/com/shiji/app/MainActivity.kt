@@ -1,6 +1,12 @@
 package com.shiji.app
 
 import android.os.Bundle
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import java.util.concurrent.TimeUnit
 import android.util.Base64
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -50,6 +56,7 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.border
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
@@ -122,6 +129,7 @@ import com.shiji.app.data.FeedPost
 import com.shiji.app.data.FriendRequest
 import com.shiji.app.data.FriendRequestItem
 import com.shiji.app.data.TokenStore
+import com.shiji.app.data.AppVersion
 import com.shiji.app.data.DeviceLoginRequest
 import com.shiji.app.data.LoginRequest
 import com.shiji.app.data.SmsSendRequest
@@ -204,6 +212,13 @@ fun ShijiApp() {
     var pendingJob by remember { mutableStateOf<String?>(null) }
     // 同一格已经有记录时，先把已有的那条抱出来，等用户选追加还是覆盖
     var conflictExisting by remember { mutableStateOf<Meal?>(null) }
+
+    // 检查更新：服务端发了比本机新的版本就弹提示
+    var pendingUpdate by remember { mutableStateOf<AppVersion?>(null) }
+    var updateDownloading by remember { mutableStateOf(false) }
+    var updateProgress by remember { mutableStateOf(0) }
+    var updateError by remember { mutableStateOf("") }
+    var downloadedApk by remember { mutableStateOf<java.io.File?>(null) }
     var pendingItems by remember { mutableStateOf<List<RecognizedItem>>(emptyList()) }
     // 0 无 / 1 核对食材名称
     var recordStage by remember { mutableStateOf(0) }
@@ -289,6 +304,15 @@ fun ShijiApp() {
         restoring = false
     }
 
+    // 进 App 后查一次更新。这个接口不需要登录，所以登录页也能弹提示。
+    LaunchedEffect(Unit) {
+        runCatching { ApiClient.api.appVersion() }.onSuccess { info ->
+            if (info.version_code > BuildConfig.VERSION_CODE && info.download_url.isNotBlank()) {
+                pendingUpdate = info
+            }
+        }
+    }
+
     fun recognize(
         text: String,
         slot: String,
@@ -354,6 +378,62 @@ fun ShijiApp() {
     }
 
     /** 用户核对完名称就提交，不等 AI：入库后热量由服务端自动回填。 */
+    /** 拉一次服务端发布的最新版本；比本机新就弹提示。 */
+    fun checkUpdate() = run {
+        val info = ApiClient.api.appVersion()
+        if (info.version_code > BuildConfig.VERSION_CODE && info.download_url.isNotBlank()) {
+            pendingUpdate = info
+        } else {
+            message = "已经是最新版本"
+        }
+    }
+
+    /** 下载新版 APK，下完交给系统安装器。 */
+    fun startDownload(info: AppVersion) {
+        updateDownloading = true
+        updateProgress = 0
+        updateError = ""
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val dir = java.io.File(context.cacheDir, "updates").apply { mkdirs() }
+                    val target = java.io.File(dir, "suibianchi-${info.version_name}.apk")
+                    if (target.exists()) target.delete()
+                    val client = okhttp3.OkHttpClient.Builder()
+                        .connectTimeout(20, TimeUnit.SECONDS)
+                        .readTimeout(180, TimeUnit.SECONDS)
+                        .build()
+                    client.newCall(okhttp3.Request.Builder().url(info.download_url).build())
+                        .execute().use { resp ->
+                            if (!resp.isSuccessful) error("下载失败 HTTP ${resp.code}")
+                            val total = resp.body?.contentLength() ?: -1L
+                            resp.body?.byteStream()?.use { input ->
+                                java.io.FileOutputStream(target).use { output ->
+                                    val buf = ByteArray(64 * 1024)
+                                    var done = 0L
+                                    while (true) {
+                                        val read = input.read(buf)
+                                        if (read <= 0) break
+                                        output.write(buf, 0, read)
+                                        done += read
+                                        if (total > 0) {
+                                            updateProgress = ((done * 100) / total).toInt()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    target
+                }
+            }
+            updateDownloading = false
+            result.onSuccess {
+                downloadedApk = it
+                installApk(context, it)
+            }.onFailure { updateError = it.message ?: "下载失败" }
+        }
+    }
+
     fun buildInputs(items: List<RecognizedItem>): List<MealItemInput> =
         items.filter { it.food_name.isNotBlank() }.map {
             MealItemInput(
@@ -632,6 +712,7 @@ fun ShijiApp() {
                             }
                         }
                     },
+                    onCheckUpdate = { checkUpdate() },
                     onLogout = {
                         // 主动退出：连设备令牌一起清掉，下次要重新验证码
                         TokenStore.clear()
@@ -852,6 +933,96 @@ fun ShijiApp() {
                 }
             },
             onDismiss = { userCard = null }
+        )
+    }
+
+    // 有新版本：给更新说明 + 一键下载安装
+    pendingUpdate?.let { info ->
+        AlertDialog(
+            onDismissRequest = {
+                if (!info.force && !updateDownloading) {
+                    pendingUpdate = null
+                    downloadedApk = null
+                    updateError = ""
+                }
+            },
+            modifier = Modifier.border(1.dp, Color(0x40FFFFFF), RoundedCornerShape(20.dp)),
+            shape = RoundedCornerShape(20.dp),
+            containerColor = DialogGlass,
+            title = { Text("有新版本 ${info.version_name}") },
+            text = {
+                Column(
+                    Modifier
+                        .heightIn(max = 280.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(info.notes.ifBlank { "建议更新到最新版本。" }, fontSize = 13.sp)
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        "当前版本 v${BuildConfig.VERSION_NAME}",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                    if (updateDownloading) {
+                        Spacer(Modifier.height(12.dp))
+                        LinearProgressIndicator(
+                            progress = updateProgress / 100f,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "正在下载 $updateProgress%",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                    if (updateError.isNotBlank()) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            updateError,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    if (downloadedApk != null && !updateDownloading) {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "安装包已经下好，点下面的按钮继续。",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val ready = downloadedApk
+                        if (ready != null) installApk(context, ready) else startDownload(info)
+                    },
+                    enabled = !updateDownloading
+                ) {
+                    Text(
+                        when {
+                            updateDownloading -> "下载中…"
+                            downloadedApk != null -> "去安装"
+                            else -> "下载并安装"
+                        }
+                    )
+                }
+            },
+            dismissButton = {
+                if (!info.force) {
+                    TextButton(
+                        onClick = {
+                            pendingUpdate = null
+                            downloadedApk = null
+                            updateError = ""
+                        },
+                        enabled = !updateDownloading
+                    ) { Text("以后再说") }
+                }
+            }
         )
     }
 
@@ -1774,6 +1945,38 @@ fun RecordDialog(
         }
     )
 }
+
+/**
+ * 把下好的 APK 交给系统安装器。
+ *
+ * Android 从 8.0 起，应用不能直接装包：得先让用户在系统设置里允许
+ * 「安装未知应用」，所以这里先检查一下，没开户就跳去做。
+ */
+private fun installApk(context: Context, file: java.io.File) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+        !context.packageManager.canRequestPackageInstalls()
+    ) {
+        runCatching {
+            context.startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:${context.packageName}")
+                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }
+        return
+    }
+    val uri = FileProvider.getUriForFile(
+        context, "${context.packageName}.fileprovider", file
+    )
+    val intent = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, "application/vnd.android.package-archive")
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    context.startActivity(intent)
+}
+
 
 private fun slotLabel(slot: String) = when (slot) {
     "breakfast" -> "早餐"
