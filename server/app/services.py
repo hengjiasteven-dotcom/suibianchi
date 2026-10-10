@@ -763,6 +763,7 @@ class DeepSeekAI(MockAI):
                 "messages": messages,
                 "temperature": temperature,
                 "max_tokens": max_tokens,
+                "thinking": {"type": "disabled"},
             },
             timeout=httpx.Timeout(45.0, connect=8.0),
         )
