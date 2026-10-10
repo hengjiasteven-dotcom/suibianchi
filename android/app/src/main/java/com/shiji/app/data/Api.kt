@@ -112,6 +112,9 @@ interface ShijiApi {
     @POST("api/v1/chat/sessions/{sid}/messages")
     suspend fun chatMessage(@Path("sid") sid: String, @Body body: ChatMessageRequest): ChatReply
 
+    @POST("api/v1/chat/sessions/{sid}/nearby")
+    suspend fun chatNearby(@Path("sid") sid: String, @Body body: NearbyModeRequest): NearbyModeResponse
+
     @POST("api/v1/chat/sessions/{sid}/end")
     suspend fun chatEnd(@Path("sid") sid: String): SimpleOk
 

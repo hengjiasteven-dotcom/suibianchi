@@ -267,6 +267,18 @@ data class ShareResponse(val share_id: String, val payload: SharePayload)
 
 data class ChatSessionResponse(val session_id: String, val notice: String = "")
 
+data class NearbyModeRequest(
+    val enabled: Boolean,
+    val lat: Double? = null,
+    val lng: Double? = null
+)
+
+data class NearbyModeResponse(
+    val enabled: Boolean = false,
+    val count: Int = 0,
+    val stores: List<StoreInfo> = emptyList()
+)
+
 data class ChatMessageRequest(
     val content: String,
     val lat: Double? = null,

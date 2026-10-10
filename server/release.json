@@ -1,7 +1,7 @@
 {
-  "version_code": 6,
-  "version_name": "0.2.4",
-  "object_key": "app/suibianchi-0.2.4.apk",
-  "notes": "附近改为模式：点亮后后续提问默认从附近商家推荐；想吃牛肉会筛选牛肉店；再点关闭附近；对话提速；支持换一批",
+  "version_code": 7,
+  "version_name": "0.2.5",
+  "object_key": "app/suibianchi-0.2.5.apk",
+  "notes": "附近模式进入时并发了解约120家附近店铺；提问想吃牛肉会再检索牛肉店；关闭附近后不再使用附近商家",
   "force": false
 }

@@ -296,6 +296,12 @@ class ChatMessageIn(BaseModel):
     keyword: Optional[str] = None
 
 
+class NearbyModeIn(BaseModel):
+    enabled: bool = True
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+
+
 class ShareIn(BaseModel):
     type: str = Field(default="daily", description="daily 或 weekly")
     date: Optional[str] = None
@@ -1355,6 +1361,24 @@ def _nearby_keyword(content: str) -> str:
     return text or "美食"
 
 
+@app.post("/api/v1/chat/sessions/{sid}/nearby")
+def chat_nearby(sid: str, payload: NearbyModeIn, user_id: int = Depends(current_user)):
+    """进入/退出附近模式：进入时并发建立上百家店的缓存。"""
+    session = _get_session(sid, user_id)
+    if not payload.enabled:
+        session.pop("nearby_cache", None)
+        session["nearby_mode"] = False
+        return {"enabled": False, "count": 0, "stores": []}
+    if payload.lat is None or payload.lng is None:
+        raise HTTPException(status_code=400, detail="需要定位")
+    stores = services.nearby_catalog(payload.lat, payload.lng, 120)
+    session["nearby_cache"] = stores
+    session["nearby_mode"] = True
+    session["nearby_center"] = (payload.lat, payload.lng)
+    session["nearby_cached_at"] = now_iso()
+    return {"enabled": True, "count": len(stores), "stores": stores[:20]}
+
+
 @app.post("/api/v1/chat/sessions/{sid}/messages")
 def chat_message(sid: str, payload: ChatMessageIn, user_id: int = Depends(current_user)):
     session = _get_session(sid, user_id)
@@ -1372,10 +1396,20 @@ def chat_message(sid: str, payload: ChatMessageIn, user_id: int = Depends(curren
     ):
         keyword = _nearby_keyword(payload.content)
         nearby_page = max(0, payload.nearby_page)
-        nearby_result = services.nearby_stores(
+        precise = services.nearby_stores(
             payload.lat, payload.lng, keyword, 20, nearby_page
-        )
-        context["nearby_stores"] = nearby_result.get("stores", [])
+        ).get("stores", [])
+        cached = session.get("nearby_cache") or []
+        merged: Dict[str, Dict] = {}
+        for store in precise:
+            name = (store.get("name") or "").strip()
+            if name:
+                merged[name] = store
+        for store in cached:
+            name = (store.get("name") or "").strip()
+            if name and name not in merged:
+                merged[name] = store
+        context["nearby_stores"] = list(merged.values())[:80]
         session["nearby_page"] = nearby_page
     ai = services.get_ai()
     result = ai.chat(payload.content, context)

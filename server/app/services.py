@@ -5,6 +5,7 @@
 """
 
 from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import difflib
 import base64
@@ -675,7 +676,7 @@ class DeepSeekAI(MockAI):
         recent_text = "、".join(recent.get("dishes") or recent.get("top_foods") or []) or "最近没有记录"
         nearby = context.get("nearby_stores") or []
         nearby_parts = []
-        for item in nearby[:12]:
+        for item in nearby[:60]:
             name = item.get("name")
             if not name:
                 continue
@@ -1182,3 +1183,33 @@ def nearby_stores(
         return {"provider": "baidu", "stores": stores, "page": max(0, page_num)}
     except Exception as exc:  # noqa: BLE001
         return {"provider": "baidu", "stores": [], "error": str(exc)}
+
+
+NEARBY_CATALOG_QUERIES = [
+    "美食", "餐厅", "火锅", "烧烤", "快餐", "面馆",
+    "川菜", "粤菜", "小吃", "日料", "咖啡", "牛肉",
+]
+
+
+def nearby_catalog(lat: float, lng: float, limit: int = 120) -> List[Dict]:
+    """并发按多个关键词查附近商家，合并去重，覆盖上百家店。
+
+    进入附近模式时调用一次；用户后续说“想吃牛肉”这类具体需求时，
+    再用精准关键词查一次补充，不需要在进入模式时识别菜品。
+    """
+    stores: Dict[str, Dict] = {}
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = [
+            pool.submit(nearby_stores, lat, lng, keyword, 20, 0)
+            for keyword in NEARBY_CATALOG_QUERIES
+        ]
+        for future in as_completed(futures):
+            try:
+                result = future.result()
+            except Exception:  # noqa: BLE001
+                continue
+            for store in result.get("stores", []):
+                name = (store.get("name") or "").strip()
+                if name and name not in stores:
+                    stores[name] = store
+    return list(stores.values())[:limit]

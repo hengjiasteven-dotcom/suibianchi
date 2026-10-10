@@ -59,6 +59,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shiji.app.data.ApiClient
 import com.shiji.app.data.ChatMessageRequest
+import com.shiji.app.data.NearbyModeRequest
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -137,6 +138,16 @@ object ChatStore {
             nearbyMode = false
             nearbyLoading = false
             hint = "附近模式已关闭"
+            val sid = sessionId
+            if (sid != null) {
+                scope.launch { runCatching { ApiClient.api.chatNearby(sid, NearbyModeRequest(false)) } }
+            }
+            return
+        }
+        val sid = sessionId
+        if (sid == null) {
+            hint = "对话还没准备好，稍等一下再点「附近」"
+            startSessionIfNeeded()
             return
         }
         val location = resolveLocation(context)
@@ -151,12 +162,14 @@ object ChatStore {
         nearbyMode = true
         nearbyLoading = true
         nearbyPage = 0
-        hint = "附近模式已开启，正在加载附近商家…"
+        hint = "附近模式已开启，正在了解附近商家…"
         scope.launch {
-            val result = runCatching { ApiClient.api.nearbyStores(lat, lng, "美食", 20) }
+            val result = runCatching {
+                ApiClient.api.chatNearby(sid, NearbyModeRequest(true, lat, lng))
+            }
             nearbyLoading = false
             result.onSuccess {
-                hint = "附近模式已开启，找到 ${it.stores.size} 家店。直接说想吃什么就行。"
+                hint = "附近模式已开启，已了解 ${it.count} 家店。直接说想吃什么就行。"
             }.onFailure {
                 hint = "附近模式已开启，但商家加载失败：${it.message ?: "网络异常"}"
             }
