@@ -1,7 +1,7 @@
 {
-  "version_code": 3,
-  "version_name": "0.2.1",
-  "object_key": "app/suibianchi-0.2.1.apk",
-  "notes": "修复记录和分享时间按本机时区显示；字号整体调大并提高对比度；新增使用说明；记录页顶部精简",
+  "version_code": 4,
+  "version_name": "0.2.2",
+  "object_key": "app/suibianchi-0.2.2.apk",
+  "notes": "对话切页面不再中断；新增附近商家入口，接入百度地图检索；图片压缩提速；对话超时与失败提示更快",
   "force": false
 }

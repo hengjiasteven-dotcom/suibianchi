@@ -1,5 +1,9 @@
 package com.shiji.app
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -49,12 +53,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shiji.app.data.ApiClient
 import com.shiji.app.data.ChatMessageRequest
+import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.SupervisorJob
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.foundation.layout.size
@@ -64,19 +71,128 @@ import androidx.compose.material3.IconButton
 import androidx.compose.runtime.derivedStateOf
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * 对话状态放在 Composable 外面：切 TAB 不会清空，
  * 只有退出软件超过 10 分钟，服务端才会结束并清空这次对话。
  */
 object ChatStore {
+    // 应用级协程：切 TAB、离开推荐页也不会取消正在等待的对话请求
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var starting = false
+
     var sessionId by mutableStateOf<String?>(null)
     var notice by mutableStateOf("")
     var hint by mutableStateOf("")
     var sending by mutableStateOf(false)
     var pending by mutableStateOf<PendingFacts?>(null)
+    var latitude: Double? = null
+    var longitude: Double? = null
     val messages = mutableStateListOf<Pair<Boolean, String>>()
     val likes = mutableStateListOf<String>()
+
+    fun launch(block: suspend () -> Unit) {
+        scope.launch { block() }
+    }
+
+    fun startSessionIfNeeded() {
+        if (sessionId != null || starting) return
+        starting = true
+        scope.launch {
+            try {
+                val session = ApiClient.api.chatStart()
+                sessionId = session.session_id
+                notice = session.notice
+            } catch (e: Exception) {
+                hint = "对话开不起来：${e.message ?: "网络异常"}"
+            } finally {
+                starting = false
+            }
+        }
+    }
+
+    fun refreshPending() {
+        scope.launch { runCatching { pending = ApiClient.api.pendingFacts() } }
+    }
+
+    fun requestNearby(context: android.content.Context) {
+        val manager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as? android.location.LocationManager
+        val providers = listOf(
+            android.location.LocationManager.GPS_PROVIDER,
+            android.location.LocationManager.NETWORK_PROVIDER,
+            android.location.LocationManager.PASSIVE_PROVIDER
+        )
+        val location = providers
+            .mapNotNull { provider -> runCatching { manager?.getLastKnownLocation(provider) }.getOrNull() }
+            .maxByOrNull { it.time }
+        if (location == null) {
+            hint = "还没拿到定位，先打开系统定位再点一次「附近」"
+            return
+        }
+        latitude = location.latitude
+        longitude = location.longitude
+        send("帮我推荐附近有什么好吃的")
+    }
+
+    fun send(text: String) {
+        val clean = text.trim()
+        val sid = sessionId
+        if (clean.isEmpty() || sending) return
+        if (sid == null) {
+            hint = "对话还在准备，稍等一下再发一次"
+            startSessionIfNeeded()
+            return
+        }
+        messages.add(true to clean)
+        sending = true
+        scope.launch {
+            try {
+                val reply = withTimeoutOrNull(120_000) {
+                    ApiClient.api.chatMessage(sid, ChatMessageRequest(clean, latitude, longitude, "餐厅"))
+                }
+                if (reply == null) {
+                    hint = "这次想得太久了，先停下。可以再发一次，或者换个说法。"
+                } else {
+                    messages.add(false to reply.reply)
+                    likes.clear()
+                    likes.addAll(reply.likes)
+                    if (reply.extracted.isNotEmpty()) {
+                        hint = "记下了 ${reply.extracted.size} 条，在下面选好程度再确认"
+                        refreshPending()
+                    } else {
+                        hint = ""
+                    }
+                }
+            } catch (e: Exception) {
+                val msg = e.message ?: ""
+                if (msg.contains("410") || msg.contains("超时")) {
+                    messages.add(false to "上一段对话超时了，已经自动重新开始，我把你刚说的又发了一次。")
+                    val restarted = runCatching {
+                        val session = ApiClient.api.chatStart()
+                        sessionId = session.session_id
+                        notice = session.notice
+                        withTimeoutOrNull(120_000) {
+                            ApiClient.api.chatMessage(session.session_id, ChatMessageRequest(clean, latitude, longitude, "餐厅"))
+                        }
+                    }.getOrNull()
+                    if (restarted != null) {
+                        messages.add(false to restarted.reply)
+                        likes.clear()
+                        likes.addAll(restarted.likes)
+                        if (restarted.extracted.isNotEmpty()) refreshPending()
+                        hint = ""
+                    } else {
+                        hint = "对话已超时，重开失败，请再发一次"
+                    }
+                } else {
+                    hint = "发送失败：${msg.ifBlank { "网络异常" }}"
+                }
+            } finally {
+                sending = false
+            }
+        }
+    }
 }
 
 /**
@@ -86,6 +202,34 @@ object ChatStore {
 @Composable
 fun ChatScreen() {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val nearbyLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        if (result.values.any { it }) {
+            ChatStore.requestNearby(context)
+        } else {
+            ChatStore.hint = "没有定位权限，附近商家用不了"
+        }
+    }
+    fun requestNearby() {
+        val fine = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        val coarse = ContextCompat.checkSelfPermission(
+            context, Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+        if (fine || coarse) {
+            ChatStore.requestNearby(context)
+        } else {
+            nearbyLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
+    }
     val listState = rememberLazyListState()
     var input by remember { mutableStateOf("") }
     if (ChatStore.messages.isEmpty()) {
@@ -94,11 +238,9 @@ fun ChatScreen() {
         )
     }
 
-    suspend fun refreshPending() {
-        runCatching { ChatStore.pending = ApiClient.api.pendingFacts() }
-    }
+    fun refreshPending() = ChatStore.refreshPending()
     fun decideRestriction(item: Restriction, level: Int, accept: Boolean) {
-        scope.launch {
+        ChatStore.launch {
             runCatching {
                 ApiClient.api.confirmRestriction(item.id, confirmed = accept, level = level)
             }
@@ -112,7 +254,7 @@ fun ChatScreen() {
     }
 
     fun decidePreference(item: Preference, level: Int, accept: Boolean) {
-        scope.launch {
+        ChatStore.launch {
             runCatching {
                 // 爱好也用 1~3 档，服务端存在 weight 字段里
                 ApiClient.api.confirmPreference(item.id, confirmed = accept, weight = level.toDouble())
@@ -128,15 +270,7 @@ fun ChatScreen() {
 
     // 只在第一次进推荐页时开会话；切 TAB 回来继续用同一个，退出软件 10 分钟后服务端自动清
     LaunchedEffect(Unit) {
-        if (ChatStore.sessionId == null) {
-            try {
-                val session = ApiClient.api.chatStart()
-                ChatStore.sessionId = session.session_id
-                ChatStore.notice = session.notice
-            } catch (e: Exception) {
-                ChatStore.hint = "对话开不起来：${e.message ?: "网络异常"}"
-            }
-        }
+        ChatStore.startSessionIfNeeded()
         // 每次回到推荐页都对一遍待确认列表，数据变了就不会留旧条目
         refreshPending()
     }
@@ -151,55 +285,14 @@ fun ChatScreen() {
 
     fun send() {
         val text = input.trim()
-        val sid = ChatStore.sessionId
-        if (text.isEmpty() || ChatStore.sending || sid == null) {
+        if (text.isEmpty() || ChatStore.sending) return
+        if (ChatStore.sessionId == null) {
+            ChatStore.startSessionIfNeeded()
+            ChatStore.hint = "对话还在准备，稍等一下再发"
             return
         }
         input = ""
-        ChatStore.messages.add(true to text)
-        ChatStore.sending = true
-        scope.launch {
-            try {
-                val reply = ApiClient.api.chatMessage(sid, ChatMessageRequest(text))
-                ChatStore.messages.add(false to reply.reply)
-                ChatStore.likes.clear()
-                ChatStore.likes.addAll(reply.likes)
-                if (reply.extracted.isNotEmpty()) {
-                    ChatStore.hint = "记下了 ${reply.extracted.size} 条，在下面选好程度再确认"
-                    refreshPending()
-                } else {
-                    ChatStore.hint = ""
-                }
-            } catch (e: Exception) {
-                val msg = e.message ?: ""
-                if (msg.contains("410") || msg.contains("超时")) {
-                    // 服务端已经把这段对话结束了（闲置超过 10 分钟）。
-                    // 不能让用户卡死：自动开一段新的，把刚才那句话重发一次。
-                    ChatStore.messages.add(
-                        false to "上一段对话超时了，已经自动重新开始，我把你刚说的又发了一次。"
-                    )
-                    val restarted = runCatching {
-                        val session = ApiClient.api.chatStart()
-                        ChatStore.sessionId = session.session_id
-                        ChatStore.notice = session.notice
-                        ApiClient.api.chatMessage(session.session_id, ChatMessageRequest(text))
-                    }.getOrNull()
-                    if (restarted != null) {
-                        ChatStore.messages.add(false to restarted.reply)
-                        ChatStore.likes.clear()
-                        ChatStore.likes.addAll(restarted.likes)
-                        if (restarted.extracted.isNotEmpty()) refreshPending()
-                        ChatStore.hint = ""
-                    } else {
-                        ChatStore.hint = "对话已超时，重开失败，请再发一次"
-                    }
-                } else {
-                    ChatStore.hint = "发送失败：${msg.ifBlank { "网络异常" }}"
-                }
-            } finally {
-                ChatStore.sending = false
-            }
-        }
+        ChatStore.send(text)
     }
 
     Column(Modifier.fillMaxSize().padding(horizontal = 12.dp)) {
@@ -299,6 +392,10 @@ fun ChatScreen() {
             Modifier.fillMaxWidth().padding(bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            TextButton(onClick = { requestNearby() }, enabled = !ChatStore.sending) {
+                Text("附近", fontSize = 15.sp)
+            }
+            Spacer(Modifier.width(4.dp))
             OutlinedTextField(
                 value = input,
                 onValueChange = { input = it },

@@ -194,8 +194,8 @@ object ApiClient {
         val client = OkHttpClient.Builder()
             // 识图要调用大模型，默认 10 秒不够
             .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(180, TimeUnit.SECONDS)
-            .writeTimeout(120, TimeUnit.SECONDS)
+            .readTimeout(90, TimeUnit.SECONDS)
+            .writeTimeout(90, TimeUnit.SECONDS)
             .addInterceptor { chain ->
                 val builder = chain.request().newBuilder()
                 token?.let { builder.addHeader("Authorization", "Bearer $it") }

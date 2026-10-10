@@ -647,6 +647,10 @@ class MockAI:
             reply += "（已避开：" + "、".join(
                 f"{r['keyword']}·{restriction_label(r.get('level'))}" for r in context["restrictions"][:5]
             ) + "）"
+        nearby = context.get("nearby_stores") or []
+        names = "、".join(s.get("name") for s in nearby[:5] if s.get("name"))
+        if names:
+            reply += f" 附近可参考：{names}。"
         return {"reply": reply, "facts": facts, "finished": False}
 
 
@@ -666,6 +670,15 @@ class DeepSeekAI(MockAI):
         gaps = "、".join(context.get("gaps") or []) or "无"
         recent = context.get("recent") or {}
         recent_text = "、".join(recent.get("dishes") or recent.get("top_foods") or []) or "最近没有记录"
+        nearby = context.get("nearby_stores") or []
+        nearby_parts = []
+        for item in nearby[:6]:
+            name = item.get("name")
+            if not name:
+                continue
+            distance = item.get("distance_m")
+            nearby_parts.append(f"{name}（约{distance}米）" if distance else name)
+        nearby_text = "、".join(nearby_parts) or "无"
         prompt = (
             "用户在「随便吃」里问该吃什么，请像朋友一样用中文回答。要求："
             "① 先用一句话回应用户当下的想法，不要一上来就报菜单；"
@@ -681,12 +694,15 @@ class DeepSeekAI(MockAI):
             "⑦ 只输出 JSON，不要额外解释："
             '{"reply":"","facts":[{"type":"preference","keyword":"","level":2},'
             '{"type":"restriction","keyword":"","level":3}],"finished":false}'
+            "⑧ 回复控制在 150 字以内，facts 最多 3 条；"
+            "⑨ 如果提供了附近店铺，推荐外卖时只能从这些店铺里选名字，回复里只写店铺名，不要提数据来源；"
             f"\n忌口（硬约束）：{restrictions}"
             f"\n长期档案里的爱好：{saved_likes}"
             f"\n本次对话聊到的口味：{likes}"
             f"\n膳食目标：{goals}"
             f"\n最近缺的类别：{gaps}"
             f"\n城市：{context.get('city') or '未知'}\n最近 7 天吃过：{recent_text}"
+            f"\n附近店铺：{nearby_text}"
             f"\n用户这次说：{message}"
         )
         try:
@@ -696,6 +712,7 @@ class DeepSeekAI(MockAI):
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.6,
+                max_tokens=600,
             )
             data = json.loads(re.search(r"\{.*\}", content, re.S).group(0))
             reply = (data.get("reply") or "").strip()
@@ -732,14 +749,19 @@ class DeepSeekAI(MockAI):
         except Exception:  # noqa: BLE001
             return super().chat(message, context)
 
-    def _call(self, messages, temperature=0.3):
+    def _call(self, messages, temperature=0.3, max_tokens=800):
         import httpx
 
         response = httpx.post(
             f"{DEEPSEEK_BASE_URL}/chat/completions",
             headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}"},
-            json={"model": DEEPSEEK_MODEL, "messages": messages, "temperature": temperature},
-            timeout=60.0,
+            json={
+                "model": DEEPSEEK_MODEL,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+            },
+            timeout=httpx.Timeout(45.0, connect=8.0),
         )
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]
@@ -790,7 +812,7 @@ class DeepSeekAI(MockAI):
                 {"role": "user", "content": blocks},
             ]
             # temperature=0：识别结果要尽量稳定，同一张图不要每次都给出不同份量
-            content = self._call(messages, temperature=0.0)
+            content = self._call(messages, temperature=0.0, max_tokens=1000)
             data = json.loads(re.search(r"\{.*\}", content, re.S).group(0))
         except Exception:  # noqa: BLE001
             return super().recognize(image_keys, text, meal_slot, source, images_base64)
@@ -866,6 +888,7 @@ class DeepSeekAI(MockAI):
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.0,
+                max_tokens=800,
             )
             data = json.loads(re.search(r"\{.*\}", content, re.S).group(0))
         except Exception:  # noqa: BLE001
@@ -912,6 +935,7 @@ class DeepSeekAI(MockAI):
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.0,
+                max_tokens=600,
             )
             data = json.loads(re.search(r"\{.*\}", content, re.S).group(0))
         except Exception:  # noqa: BLE001
@@ -1073,23 +1097,42 @@ def nearby_stores(lat: float, lng: float, keyword: str = "餐厅", limit: int = 
             {"name": "老城面馆", "distance_m": 650, "type": "面食"},
         ]
         return {"provider": "mock", "stores": demo[:limit]}
-    # 生产：调用百度地图地点检索接口，结果用后即弃
+    # 生产：按需调用百度地点检索，只查这一次，不建全量商家库；结果用后即弃
     import httpx
 
-    response = httpx.get(
-        "https://api.map.baidu.com/place/v2/search",
-        params={
-            "query": keyword,
-            "location": f"{lat},{lng}",
-            "radius": 2000,
-            "output": "json",
-            "ak": BAIDU_MAP_AK,
-        },
-        timeout=10.0,
-    )
-    data = response.json()
-    stores = [
-        {"name": item.get("name"), "distance_m": item.get("detail_info", {}).get("distance")}
-        for item in data.get("results", [])[:limit]
-    ]
-    return {"provider": "baidu", "stores": stores}
+    try:
+        response = httpx.get(
+            "https://api.map.baidu.com/place/v2/search",
+            params={
+                "query": keyword,
+                "location": f"{lat},{lng}",
+                "radius": 3000,
+                "output": "json",
+                "scope": 2,
+                "page_size": max(1, min(limit, 20)),
+                "page_num": 0,
+                "ak": BAIDU_MAP_AK,
+            },
+            timeout=8.0,
+        )
+        data = response.json()
+        if data.get("status") != 0:
+            return {"provider": "baidu", "stores": [], "error": data.get("message") or "百度地点检索失败"}
+        stores = []
+        for item in data.get("results", [])[:limit]:
+            detail = item.get("detail_info") or {}
+            distance = detail.get("distance")
+            try:
+                distance = int(distance) if distance is not None else None
+            except (TypeError, ValueError):
+                distance = None
+            stores.append(
+                {
+                    "name": item.get("name") or "",
+                    "distance_m": distance,
+                    "type": item.get("type") or "",
+                }
+            )
+        return {"provider": "baidu", "stores": stores}
+    except Exception as exc:  # noqa: BLE001
+        return {"provider": "baidu", "stores": [], "error": str(exc)}

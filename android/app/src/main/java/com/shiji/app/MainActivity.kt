@@ -1992,11 +1992,11 @@ private fun slotLabel(slot: String) = when (slot) {
     else -> slot
 }
 
-/** 读取相册图片，最长边压到 1600 像素后转 base64，避免请求体过大。 */
+/** 读取相册图片，最长边压到 1024 像素后转 base64，兼顾识别精度和上传速度。 */
 private fun loadImageBase64(
     context: android.content.Context,
     uri: android.net.Uri,
-    maxSide: Int = 1600
+    maxSide: Int = 1024
 ): Pair<String, String>? {
     val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
     val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
@@ -2013,7 +2013,7 @@ private fun loadImageBase64(
         bitmap
     }
     val out = java.io.ByteArrayOutputStream()
-    scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 85, out)
+    scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 78, out)
     val name = uri.lastPathSegment?.substringAfterLast('/') ?: "photo.jpg"
     return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP) to name
 }

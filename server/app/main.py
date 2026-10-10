@@ -289,6 +289,9 @@ class RecommendIn(BaseModel):
 
 class ChatMessageIn(BaseModel):
     content: str
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    keyword: Optional[str] = None
 
 
 class ShareIn(BaseModel):
@@ -1346,8 +1349,23 @@ def chat_message(sid: str, payload: ChatMessageIn, user_id: int = Depends(curren
     # 让 AI 知道最近吃了什么、缺什么，才好给建议
     context["gaps"] = _recent_gaps(user_id)
     context["recent"] = _recent_summary(user_id)
+    nearby_keywords = ("附近", "周边", "外卖", "点外卖", "餐厅", "店家", "商家", "饭店", "馆子")
+    if (
+        payload.lat is not None
+        and payload.lng is not None
+        and any(word in payload.content for word in nearby_keywords)
+    ):
+        context["nearby_stores"] = services.nearby_stores(
+            payload.lat, payload.lng, payload.keyword or "餐厅", 6
+        ).get("stores", [])
     ai = services.get_ai()
     result = ai.chat(payload.content, context)
+    stores = context.get("nearby_stores") or []
+    if stores:
+        names = [s.get("name") or "" for s in stores[:5] if s.get("name")]
+        reply_now = result.get("reply") or ""
+        if names and not any(name in reply_now for name in names):
+            result["reply"] = reply_now.rstrip() + "\n附近可参考：" + "、".join(names) + "。"
     session["messages"].append({"role": "user", "content": payload.content})
     session["messages"].append({"role": "assistant", "content": result["reply"]})
 
@@ -1413,6 +1431,7 @@ def chat_message(sid: str, payload: ChatMessageIn, user_id: int = Depends(curren
         "extracted": saved,
         "likes": session.get("likes", []),
         "finished": result.get("finished", False),
+        "stores": stores,
     }
 
 

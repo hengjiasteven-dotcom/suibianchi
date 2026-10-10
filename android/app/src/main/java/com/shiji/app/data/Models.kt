@@ -259,13 +259,19 @@ data class ShareResponse(val share_id: String, val payload: SharePayload)
 
 data class ChatSessionResponse(val session_id: String, val notice: String = "")
 
-data class ChatMessageRequest(val content: String)
+data class ChatMessageRequest(
+    val content: String,
+    val lat: Double? = null,
+    val lng: Double? = null,
+    val keyword: String? = null
+)
 
 data class ChatReply(
     val reply: String,
     val extracted: List<ExtractedFact> = emptyList(),
     val likes: List<String> = emptyList(),
-    val finished: Boolean = false
+    val finished: Boolean = false,
+    val stores: List<StoreInfo> = emptyList()
 )
 
 data class ExtractedFact(
