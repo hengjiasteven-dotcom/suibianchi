@@ -69,6 +69,7 @@ QINIU_URL_TTL = int(os.environ.get("QINIU_URL_TTL", "21600"))
 # 地图
 MAP_PROVIDER = os.environ.get("SHIJI_MAP_PROVIDER", "mock")
 BAIDU_MAP_AK = os.environ.get("BAIDU_MAP_AK", "")
+BAIDU_MAP_SK = os.environ.get("BAIDU_MAP_SK", "")
 
 # AI 调用配额：防止有人拿接口白嫖你的 DeepSeek 额度
 AI_DAILY_PER_USER = int(os.environ.get("SHIJI_AI_DAILY_PER_USER", 100))

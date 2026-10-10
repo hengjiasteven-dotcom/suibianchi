@@ -5,10 +5,12 @@
 """
 
 from datetime import datetime, timezone
+import hashlib
 import difflib
 import base64
 import json
 import re
+from urllib.parse import quote_plus
 from typing import Dict, List, Optional
 
 from . import db
@@ -16,6 +18,7 @@ from .config import (
     AI_INCLUDE_INDEX,
     AI_PROVIDER,
     BAIDU_MAP_AK,
+    BAIDU_MAP_SK,
     DEEPSEEK_API_KEY,
     DEEPSEEK_BASE_URL,
     DEEPSEEK_MODEL,
@@ -1089,6 +1092,20 @@ def create_upload_token(user_id: int, count: int = 1) -> Dict:
 
 # ---------------------------------------------------------------- 地图检索
 
+
+def _baidu_query(params: List[tuple]) -> str:
+    """按百度官方规则：每个 value 做一次 UTF-8 URL 编码，按参数顺序拼接。"""
+    return "&".join(
+        f"{key}={quote_plus(str(value), safe='')}" for key, value in params
+    )
+
+
+def _baidu_sn(path: str, query: str, sk: str) -> str:
+    """百度 SN 签名：path?query + SK 整体再做一次 URL 编码，最后 MD5。"""
+    whole = path + "?" + query + sk
+    return hashlib.md5(quote_plus(whole, safe="").encode("utf-8")).hexdigest()
+
+
 def nearby_stores(lat: float, lng: float, keyword: str = "餐厅", limit: int = 5) -> Dict:
     if MAP_PROVIDER == "mock" or not BAIDU_MAP_AK:
         demo = [
@@ -1101,23 +1118,26 @@ def nearby_stores(lat: float, lng: float, keyword: str = "餐厅", limit: int = 
     import httpx
 
     try:
-        # 百度域名同时有 IPv6 记录，服务器也有 IPv6；这里绑定 IPv4 本地地址，
-        # 确保请求从白名单里的 IPv4 出口出去，否则百度会返回 210 IP 校验失败。
+        path = "/place/v2/search"
+        params = [
+            ("query", keyword),
+            ("location", f"{lat},{lng}"),
+            ("radius", "3000"),
+            ("output", "json"),
+            ("scope", "2"),
+            ("page_size", str(max(1, min(limit, 20)))),
+            ("page_num", "0"),
+            ("ak", BAIDU_MAP_AK),
+        ]
+        query = _baidu_query(params)
+        if BAIDU_MAP_SK:
+            query += "&sn=" + _baidu_sn(path, query, BAIDU_MAP_SK)
+        url = f"https://api.map.baidu.com{path}?{query}"
+        # 百度域名同时有 IPv6 记录，服务器也有 IPv6；绑定 IPv4 本地地址，
+        # 确保请求从白名单里的 IPv4 出口出去。
         transport = httpx.HTTPTransport(local_address="0.0.0.0")
         with httpx.Client(transport=transport, timeout=8.0) as client:
-            response = client.get(
-                "https://api.map.baidu.com/place/v2/search",
-                params={
-                    "query": keyword,
-                    "location": f"{lat},{lng}",
-                    "radius": 3000,
-                    "output": "json",
-                    "scope": 2,
-                    "page_size": max(1, min(limit, 20)),
-                    "page_num": 0,
-                    "ak": BAIDU_MAP_AK,
-                },
-            )
+            response = client.get(url)
         data = response.json()
         if data.get("status") != 0:
             return {"provider": "baidu", "stores": [], "error": data.get("message") or "百度地点检索失败"}
