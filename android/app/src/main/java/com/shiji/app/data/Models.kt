@@ -263,7 +263,8 @@ data class ChatMessageRequest(
     val content: String,
     val lat: Double? = null,
     val lng: Double? = null,
-    val keyword: String? = null
+    val keyword: String? = null,
+    val nearby_page: Int = 0
 )
 
 data class ChatReply(
@@ -271,7 +272,8 @@ data class ChatReply(
     val extracted: List<ExtractedFact> = emptyList(),
     val likes: List<String> = emptyList(),
     val finished: Boolean = false,
-    val stores: List<StoreInfo> = emptyList()
+    val stores: List<StoreInfo> = emptyList(),
+    val nearby_page: Int = 0
 )
 
 data class ExtractedFact(

@@ -1,7 +1,7 @@
 {
-  "version_code": 4,
-  "version_name": "0.2.2",
-  "object_key": "app/suibianchi-0.2.2.apk",
-  "notes": "对话切页面不再中断；新增附近商家入口，接入百度地图检索；图片压缩提速；对话超时与失败提示更快",
+  "version_code": 5,
+  "version_name": "0.2.3",
+  "object_key": "app/suibianchi-0.2.3.apk",
+  "notes": "修复对话固定回复；附近商家支持换一批、翻页给不同店铺；关闭 DeepSeek 思考提速；提高对话输出上限",
   "force": false
 }

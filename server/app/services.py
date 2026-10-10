@@ -682,6 +682,8 @@ class DeepSeekAI(MockAI):
             distance = item.get("distance_m")
             nearby_parts.append(f"{name}（约{distance}米）" if distance else name)
         nearby_text = "、".join(nearby_parts) or "无"
+        recommended = context.get("recommended_stores") or []
+        recommended_text = "、".join(str(name) for name in recommended[-12:] if name) or "无"
         prompt = (
             "用户在「随便吃」里问该吃什么，请像朋友一样用中文回答。要求："
             "① 先用一句话回应用户当下的想法，不要一上来就报菜单；"
@@ -699,6 +701,7 @@ class DeepSeekAI(MockAI):
             '{"type":"restriction","keyword":"","level":3}],"finished":false}'
             "⑧ 回复控制在 150 字以内，facts 最多 3 条；"
             "⑨ 如果提供了附近店铺，推荐外卖时只能从这些店铺里选名字，回复里只写店铺名，不要提数据来源；"
+            "⑩ 「已经推荐过」的店不要再推，除非用户明确点名；没有新店就说附近暂时没有更多新店，不要编造店名；"
             f"\n忌口（硬约束）：{restrictions}"
             f"\n长期档案里的爱好：{saved_likes}"
             f"\n本次对话聊到的口味：{likes}"
@@ -706,6 +709,7 @@ class DeepSeekAI(MockAI):
             f"\n最近缺的类别：{gaps}"
             f"\n城市：{context.get('city') or '未知'}\n最近 7 天吃过：{recent_text}"
             f"\n附近店铺：{nearby_text}"
+            f"\n已经推荐过的店：{recommended_text}"
             f"\n用户这次说：{message}"
         )
         try:
@@ -715,7 +719,7 @@ class DeepSeekAI(MockAI):
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.6,
-                max_tokens=600,
+                max_tokens=1000,
             )
             data = json.loads(re.search(r"\{.*\}", content, re.S).group(0))
             reply = (data.get("reply") or "").strip()
@@ -1107,7 +1111,13 @@ def _baidu_sn(path: str, query: str, sk: str) -> str:
     return hashlib.md5(quote_plus(whole, safe="").encode("utf-8")).hexdigest()
 
 
-def nearby_stores(lat: float, lng: float, keyword: str = "餐厅", limit: int = 5) -> Dict:
+def nearby_stores(
+    lat: float,
+    lng: float,
+    keyword: str = "餐厅",
+    limit: int = 5,
+    page_num: int = 0,
+) -> Dict:
     if MAP_PROVIDER == "mock" or not BAIDU_MAP_AK:
         demo = [
             {"name": "巷口家常菜", "distance_m": 320, "type": "家常菜"},
@@ -1127,7 +1137,7 @@ def nearby_stores(lat: float, lng: float, keyword: str = "餐厅", limit: int = 
             ("output", "json"),
             ("scope", "2"),
             ("page_size", str(max(1, min(limit, 20)))),
-            ("page_num", "0"),
+            ("page_num", str(max(0, page_num))),
             ("ak", BAIDU_MAP_AK),
         ]
         query = _baidu_query(params)
@@ -1157,6 +1167,6 @@ def nearby_stores(lat: float, lng: float, keyword: str = "餐厅", limit: int = 
                     "type": item.get("type") or "",
                 }
             )
-        return {"provider": "baidu", "stores": stores}
+        return {"provider": "baidu", "stores": stores, "page": max(0, page_num)}
     except Exception as exc:  # noqa: BLE001
         return {"provider": "baidu", "stores": [], "error": str(exc)}

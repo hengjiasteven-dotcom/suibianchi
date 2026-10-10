@@ -89,6 +89,7 @@ object ChatStore {
     var pending by mutableStateOf<PendingFacts?>(null)
     var latitude: Double? = null
     var longitude: Double? = null
+    var nearbyPage = 0
     val messages = mutableStateListOf<Pair<Boolean, String>>()
     val likes = mutableStateListOf<String>()
 
@@ -145,11 +146,17 @@ object ChatStore {
             return
         }
         messages.add(true to clean)
+        val nearbyIntent = listOf(
+            "附近", "周边", "外卖", "点外卖", "餐厅",
+            "换一换", "换一批", "换一家", "其他", "还有", "别的", "再来"
+        ).any { it in clean }
+        val page = if (nearbyIntent) nearbyPage else 0
+        if (nearbyIntent) nearbyPage += 1
         sending = true
         scope.launch {
             try {
                 val reply = withTimeoutOrNull(120_000) {
-                    ApiClient.api.chatMessage(sid, ChatMessageRequest(clean, latitude, longitude, "餐厅"))
+                    ApiClient.api.chatMessage(sid, ChatMessageRequest(clean, latitude, longitude, "餐厅", page))
                 }
                 if (reply == null) {
                     hint = "这次想得太久了，先停下。可以再发一次，或者换个说法。"
@@ -173,7 +180,7 @@ object ChatStore {
                         sessionId = session.session_id
                         notice = session.notice
                         withTimeoutOrNull(120_000) {
-                            ApiClient.api.chatMessage(session.session_id, ChatMessageRequest(clean, latitude, longitude, "餐厅"))
+                            ApiClient.api.chatMessage(session.session_id, ChatMessageRequest(clean, latitude, longitude, "餐厅", page))
                         }
                     }.getOrNull()
                     if (restarted != null) {
