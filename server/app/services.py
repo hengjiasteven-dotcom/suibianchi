@@ -1101,20 +1101,23 @@ def nearby_stores(lat: float, lng: float, keyword: str = "餐厅", limit: int = 
     import httpx
 
     try:
-        response = httpx.get(
-            "https://api.map.baidu.com/place/v2/search",
-            params={
-                "query": keyword,
-                "location": f"{lat},{lng}",
-                "radius": 3000,
-                "output": "json",
-                "scope": 2,
-                "page_size": max(1, min(limit, 20)),
-                "page_num": 0,
-                "ak": BAIDU_MAP_AK,
-            },
-            timeout=8.0,
-        )
+        # 百度域名同时有 IPv6 记录，服务器也有 IPv6；这里绑定 IPv4 本地地址，
+        # 确保请求从白名单里的 IPv4 出口出去，否则百度会返回 210 IP 校验失败。
+        transport = httpx.HTTPTransport(local_address="0.0.0.0")
+        with httpx.Client(transport=transport, timeout=8.0) as client:
+            response = client.get(
+                "https://api.map.baidu.com/place/v2/search",
+                params={
+                    "query": keyword,
+                    "location": f"{lat},{lng}",
+                    "radius": 3000,
+                    "output": "json",
+                    "scope": 2,
+                    "page_size": max(1, min(limit, 20)),
+                    "page_num": 0,
+                    "ak": BAIDU_MAP_AK,
+                },
+            )
         data = response.json()
         if data.get("status") != 0:
             return {"provider": "baidu", "stores": [], "error": data.get("message") or "百度地点检索失败"}
