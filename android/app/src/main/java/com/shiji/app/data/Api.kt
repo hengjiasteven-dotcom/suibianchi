@@ -92,7 +92,8 @@ interface ShijiApi {
     suspend fun nearbyStores(
         @Query("lat") lat: Double,
         @Query("lng") lng: Double,
-        @Query("keyword") keyword: String = "餐厅"
+        @Query("keyword") keyword: String = "餐厅",
+        @Query("limit") limit: Int = 5
     ): NearbyResponse
 
     // 报告

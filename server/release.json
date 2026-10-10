@@ -1,7 +1,7 @@
 {
-  "version_code": 5,
-  "version_name": "0.2.3",
-  "object_key": "app/suibianchi-0.2.3.apk",
-  "notes": "修复对话固定回复；附近商家支持换一批、翻页给不同店铺；关闭 DeepSeek 思考提速；提高对话输出上限",
+  "version_code": 6,
+  "version_name": "0.2.4",
+  "object_key": "app/suibianchi-0.2.4.apk",
+  "notes": "附近改为模式：点亮后后续提问默认从附近商家推荐；想吃牛肉会筛选牛肉店；再点关闭附近；对话提速；支持换一批",
   "force": false
 }

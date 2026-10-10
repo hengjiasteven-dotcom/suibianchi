@@ -289,6 +289,7 @@ class RecommendIn(BaseModel):
 
 class ChatMessageIn(BaseModel):
     content: str
+    nearby_mode: bool = False
     nearby_page: int = 0
     lat: Optional[float] = None
     lng: Optional[float] = None
@@ -1340,6 +1341,20 @@ def _get_session(sid: str, user_id: int) -> Dict:
     return session
 
 
+
+def _nearby_keyword(content: str) -> str:
+    """把「我想吃牛肉」这类问题压成百度地点检索能用的关键词。"""
+    text = content or ""
+    for word in (
+        "我想吃", "想吃", "来点", "有没有", "推荐", "附近", "周边",
+        "换一换", "换一批", "换一家", "其他", "还有", "别的", "再来",
+        "外卖", "点个", "点份", "吃", "的", "店", "吧", "呢",
+    ):
+        text = text.replace(word, " ")
+    text = "".join(text.split())
+    return text or "美食"
+
+
 @app.post("/api/v1/chat/sessions/{sid}/messages")
 def chat_message(sid: str, payload: ChatMessageIn, user_id: int = Depends(current_user)):
     session = _get_session(sid, user_id)
@@ -1350,26 +1365,18 @@ def chat_message(sid: str, payload: ChatMessageIn, user_id: int = Depends(curren
     # 让 AI 知道最近吃了什么、缺什么，才好给建议
     context["gaps"] = _recent_gaps(user_id)
     context["recent"] = _recent_summary(user_id)
-    nearby_keywords = (
-        "附近", "周边", "外卖", "点外卖", "餐厅", "店家", "商家", "饭店", "馆子",
-        "换一换", "换一批", "换一家", "其他", "还有", "别的", "再来",
-    )
-    nearby_page = max(0, payload.nearby_page)
     if (
-        payload.lat is not None
+        payload.nearby_mode
+        and payload.lat is not None
         and payload.lng is not None
-        and any(word in payload.content for word in nearby_keywords)
     ):
+        keyword = _nearby_keyword(payload.content)
+        nearby_page = max(0, payload.nearby_page)
         nearby_result = services.nearby_stores(
-            payload.lat, payload.lng, payload.keyword or "餐厅", 12, nearby_page
+            payload.lat, payload.lng, keyword, 20, nearby_page
         )
-        context["recommended_stores"] = list(session.get("recommended_stores", []))
         context["nearby_stores"] = nearby_result.get("stores", [])
         session["nearby_page"] = nearby_page
-        for store in context["nearby_stores"]:
-            name = (store.get("name") or "").strip()
-            if name and name not in session.setdefault("recommended_stores", []):
-                session["recommended_stores"].append(name)
     ai = services.get_ai()
     result = ai.chat(payload.content, context)
     stores = context.get("nearby_stores") or []

@@ -675,12 +675,18 @@ class DeepSeekAI(MockAI):
         recent_text = "、".join(recent.get("dishes") or recent.get("top_foods") or []) or "最近没有记录"
         nearby = context.get("nearby_stores") or []
         nearby_parts = []
-        for item in nearby[:6]:
+        for item in nearby[:12]:
             name = item.get("name")
             if not name:
                 continue
-            distance = item.get("distance_m")
-            nearby_parts.append(f"{name}（约{distance}米）" if distance else name)
+            bits = []
+            if item.get("distance_m"):
+                bits.append(f"约{item['distance_m']}米")
+            if item.get("tag"):
+                bits.append(str(item["tag"]))
+            if item.get("rating"):
+                bits.append(f"评分{item['rating']}")
+            nearby_parts.append(f"{name}（{'，'.join(bits)}）" if bits else name)
         nearby_text = "、".join(nearby_parts) or "无"
         recommended = context.get("recommended_stores") or []
         recommended_text = "、".join(str(name) for name in recommended[-12:] if name) or "无"
@@ -702,6 +708,8 @@ class DeepSeekAI(MockAI):
             "⑧ 回复控制在 150 字以内，facts 最多 3 条；"
             "⑨ 如果提供了附近店铺，推荐外卖时只能从这些店铺里选名字，回复里只写店铺名，不要提数据来源；"
             "⑩ 「已经推荐过」的店不要再推，除非用户明确点名；没有新店就说附近暂时没有更多新店，不要编造店名；"
+            "⑪ 如果用户明确说想吃什么（例如牛肉），只从附近店铺里挑能提供这类食物的店，并结合店铺标签/评分说明理由；没有匹配就说附近暂时没找到，不要编造；"
+            "⑫ 招牌菜不确定时，只推荐菜品类型或常见做法，并提示以店内菜单为准；"
             f"\n忌口（硬约束）：{restrictions}"
             f"\n长期档案里的爱好：{saved_likes}"
             f"\n本次对话聊到的口味：{likes}"
@@ -1165,6 +1173,10 @@ def nearby_stores(
                     "name": item.get("name") or "",
                     "distance_m": distance,
                     "type": item.get("type") or "",
+                    "tag": detail.get("classified_poi_tag") or detail.get("tag") or "",
+                    "rating": detail.get("overall_rating") or "",
+                    "price": detail.get("price") or "",
+                    "address": item.get("address") or "",
                 }
             )
         return {"provider": "baidu", "stores": stores, "page": max(0, page_num)}

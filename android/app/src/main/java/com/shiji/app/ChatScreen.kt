@@ -23,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -89,6 +90,8 @@ object ChatStore {
     var pending by mutableStateOf<PendingFacts?>(null)
     var latitude: Double? = null
     var longitude: Double? = null
+    var nearbyMode by mutableStateOf(false)
+    var nearbyLoading by mutableStateOf(false)
     var nearbyPage = 0
     val messages = mutableStateListOf<Pair<Boolean, String>>()
     val likes = mutableStateListOf<String>()
@@ -117,23 +120,47 @@ object ChatStore {
         scope.launch { runCatching { pending = ApiClient.api.pendingFacts() } }
     }
 
-    fun requestNearby(context: android.content.Context) {
+    private fun resolveLocation(context: android.content.Context): android.location.Location? {
         val manager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as? android.location.LocationManager
         val providers = listOf(
             android.location.LocationManager.GPS_PROVIDER,
             android.location.LocationManager.NETWORK_PROVIDER,
             android.location.LocationManager.PASSIVE_PROVIDER
         )
-        val location = providers
+        return providers
             .mapNotNull { provider -> runCatching { manager?.getLastKnownLocation(provider) }.getOrNull() }
             .maxByOrNull { it.time }
+    }
+
+    fun toggleNearby(context: android.content.Context) {
+        if (nearbyMode) {
+            nearbyMode = false
+            nearbyLoading = false
+            hint = "附近模式已关闭"
+            return
+        }
+        val location = resolveLocation(context)
         if (location == null) {
             hint = "还没拿到定位，先打开系统定位再点一次「附近」"
             return
         }
-        latitude = location.latitude
-        longitude = location.longitude
-        send("帮我推荐附近有什么好吃的")
+        val lat = location.latitude
+        val lng = location.longitude
+        latitude = lat
+        longitude = lng
+        nearbyMode = true
+        nearbyLoading = true
+        nearbyPage = 0
+        hint = "附近模式已开启，正在加载附近商家…"
+        scope.launch {
+            val result = runCatching { ApiClient.api.nearbyStores(lat, lng, "美食", 20) }
+            nearbyLoading = false
+            result.onSuccess {
+                hint = "附近模式已开启，找到 ${it.stores.size} 家店。直接说想吃什么就行。"
+            }.onFailure {
+                hint = "附近模式已开启，但商家加载失败：${it.message ?: "网络异常"}"
+            }
+        }
     }
 
     fun send(text: String) {
@@ -146,17 +173,16 @@ object ChatStore {
             return
         }
         messages.add(true to clean)
-        val nearbyIntent = listOf(
-            "附近", "周边", "外卖", "点外卖", "餐厅",
+        val wantsAnother = listOf(
             "换一换", "换一批", "换一家", "其他", "还有", "别的", "再来"
         ).any { it in clean }
-        val page = if (nearbyIntent) nearbyPage else 0
-        if (nearbyIntent) nearbyPage += 1
+        val page = if (nearbyMode && wantsAnother) nearbyPage else 0
+        if (nearbyMode && wantsAnother) nearbyPage += 1
         sending = true
         scope.launch {
             try {
                 val reply = withTimeoutOrNull(120_000) {
-                    ApiClient.api.chatMessage(sid, ChatMessageRequest(clean, latitude, longitude, "餐厅", page))
+                    ApiClient.api.chatMessage(sid, ChatMessageRequest(clean, latitude, longitude, "美食", nearbyMode, page))
                 }
                 if (reply == null) {
                     hint = "这次想得太久了，先停下。可以再发一次，或者换个说法。"
@@ -180,7 +206,7 @@ object ChatStore {
                         sessionId = session.session_id
                         notice = session.notice
                         withTimeoutOrNull(120_000) {
-                            ApiClient.api.chatMessage(session.session_id, ChatMessageRequest(clean, latitude, longitude, "餐厅", page))
+                            ApiClient.api.chatMessage(session.session_id, ChatMessageRequest(clean, latitude, longitude, "美食", nearbyMode, page))
                         }
                     }.getOrNull()
                     if (restarted != null) {
@@ -214,12 +240,12 @@ fun ChatScreen() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { result ->
         if (result.values.any { it }) {
-            ChatStore.requestNearby(context)
+            ChatStore.toggleNearby(context)
         } else {
             ChatStore.hint = "没有定位权限，附近商家用不了"
         }
     }
-    fun requestNearby() {
+    fun toggleNearby() {
         val fine = ContextCompat.checkSelfPermission(
             context, Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
@@ -227,7 +253,7 @@ fun ChatScreen() {
             context, Manifest.permission.ACCESS_COARSE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
         if (fine || coarse) {
-            ChatStore.requestNearby(context)
+            ChatStore.toggleNearby(context)
         } else {
             nearbyLauncher.launch(
                 arrayOf(
@@ -399,8 +425,14 @@ fun ChatScreen() {
             Modifier.fillMaxWidth().padding(bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            TextButton(onClick = { requestNearby() }, enabled = !ChatStore.sending) {
-                Text("附近", fontSize = 15.sp)
+            TextButton(
+                onClick = { toggleNearby() },
+                enabled = !ChatStore.sending,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = if (ChatStore.nearbyMode) Color(0xFF7FE0A0) else Color(0xFFB7D4FF)
+                )
+            ) {
+                Text(if (ChatStore.nearbyMode) "附近已开" else "附近", fontSize = 15.sp)
             }
             Spacer(Modifier.width(4.dp))
             OutlinedTextField(

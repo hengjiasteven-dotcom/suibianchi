@@ -197,7 +197,15 @@ data class Plan(
     val scene: String = "diy"
 )
 
-data class StoreInfo(val name: String, val distance_m: Int? = null, val type: String? = null)
+data class StoreInfo(
+    val name: String,
+    val distance_m: Int? = null,
+    val type: String? = null,
+    val tag: String = "",
+    val rating: String = "",
+    val price: String = "",
+    val address: String = ""
+)
 
 data class RecommendRequest(
     val scene: String = "diy",
@@ -264,6 +272,7 @@ data class ChatMessageRequest(
     val lat: Double? = null,
     val lng: Double? = null,
     val keyword: String? = null,
+    val nearby_mode: Boolean = false,
     val nearby_page: Int = 0
 )
 
