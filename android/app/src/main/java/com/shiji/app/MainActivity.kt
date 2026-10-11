@@ -784,7 +784,10 @@ fun ShijiApp() {
                     message = message,
                     onRefresh = { loadHome() },
                     onGuide = { showGuide = true },
-                    onRecord = { showRecordDialog = true }
+                    onRecord = {
+                        recordSlot = autoSlotForNow()
+                        showRecordDialog = true
+                    }
                 )
                 1 -> CalendarScreen(
                     meals = meals,
@@ -893,9 +896,18 @@ fun ShijiApp() {
                                 runCatching {
                                     val result = ApiClient.api.addFriend(FriendRequest(code))
                                     refreshPlaza()
-                                    message = result.message.ifBlank { "申请已发出" }
-                                }.onFailure {
-                                    message = "加好友失败：${it.message ?: "网络异常"}"
+                                    message = when (result.status) {
+                                        "friends" -> "你们已经是好友，无需重复添加"
+                                        "pending" -> "已经申请过了，等对方同意"
+                                        else -> result.message.ifBlank { "申请已发出" }
+                                    }
+                                }.onFailure { e ->
+                                    val raw = e.message ?: ""
+                                    message = when {
+                                        raw.contains("404") -> "没有找到这个 ID，请检查后再试"
+                                        raw.contains("400") -> "不能添加自己"
+                                        else -> "加好友失败：${raw.ifBlank { "网络异常" }}"
+                                    }
                                 }
                             }
                         },
@@ -942,9 +954,18 @@ fun ShijiApp() {
                         refreshPlaza()
                         // 重新拉一次名片，按钮文案跟着关系变
                         userCard = ApiClient.api.publicUser(code)
-                        message = result.message.ifBlank { "申请已发出" }
-                    }.onFailure {
-                        message = "加好友失败：${it.message ?: "网络异常"}"
+                        message = when (result.status) {
+                            "friends" -> "你们已经是好友，无需重复添加"
+                            "pending" -> "已经申请过了，等对方同意"
+                            else -> result.message.ifBlank { "申请已发出" }
+                        }
+                    }.onFailure { e ->
+                        val raw = e.message ?: ""
+                        message = when {
+                            raw.contains("404") -> "没有找到这个 ID，请检查后再试"
+                            raw.contains("400") -> "不能添加自己"
+                            else -> "加好友失败：${raw.ifBlank { "网络异常" }}"
+                        }
                     }
                 }
             },
@@ -972,7 +993,7 @@ fun ShijiApp() {
                         .heightIn(max = 280.dp)
                         .verticalScroll(rememberScrollState())
                 ) {
-                    Text(info.notes.ifBlank { "建议更新到最新版本。" }, fontSize = 15.sp)
+                    Text("有新版本可用，建议更新到最新版本。", fontSize = 15.sp)
                     Spacer(Modifier.height(10.dp))
                     Text(
                         "当前版本 v${BuildConfig.VERSION_NAME}",
@@ -1993,6 +2014,17 @@ private fun installApk(context: Context, file: java.io.File) {
     context.startActivity(intent)
 }
 
+
+/** 当前时间对应的餐次：4-10 早餐，10-15 午餐，15-21 晚餐，21-4 夜宵。 */
+private fun autoSlotForNow(): String {
+    val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+    return when (hour) {
+        in 4..9 -> "breakfast"
+        in 10..14 -> "lunch"
+        in 15..20 -> "dinner"
+        else -> "supper"
+    }
+}
 
 private fun slotLabel(slot: String) = when (slot) {
     "breakfast" -> "早餐"

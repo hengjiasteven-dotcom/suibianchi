@@ -15,6 +15,7 @@
 """
 
 import os
+from datetime import datetime, timedelta, timezone
 import re
 import sys
 import tempfile
@@ -104,7 +105,7 @@ def main():
         "/api/v1/meals",
         json={
             "meal_slot": "lunch",
-            "eaten_at": "2026-10-09T12:00:00+00:00",
+            "eaten_at": (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat(),
             "source": "diy",
             "note": "",
             "items": [

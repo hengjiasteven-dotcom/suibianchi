@@ -78,6 +78,7 @@ fun ProfilePage(
     onDeleteAccount: () -> Unit,
     onOpenPrivacy: () -> Unit
 ) {
+    val context = LocalContext.current
     var editing by remember { mutableStateOf(false) }
     // 点头像弹出来的选择框
     var pickingAvatar by remember { mutableStateOf(false) }
@@ -318,6 +319,26 @@ fun ProfilePage(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("使用说明", fontSize = 15.sp, modifier = Modifier.weight(1f))
+            Text("›", fontSize = 18.sp, color = MaterialTheme.colorScheme.outline)
+        }
+
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .clickable {
+                    val intent = Intent(
+                        Intent.ACTION_SENDTO,
+                        android.net.Uri.parse("mailto:1328148985@qq.com")
+                    ).apply {
+                        putExtra(Intent.EXTRA_SUBJECT, "随便吃 App 反馈")
+                    }
+                    runCatching { context.startActivity(intent) }
+                }
+                .padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("反馈意见", fontSize = 15.sp, modifier = Modifier.weight(1f))
             Text("›", fontSize = 18.sp, color = MaterialTheme.colorScheme.outline)
         }
 
