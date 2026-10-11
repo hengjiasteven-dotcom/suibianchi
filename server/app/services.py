@@ -12,6 +12,7 @@ import base64
 import json
 import re
 from urllib.parse import quote_plus
+import httpx
 from typing import Dict, List, Optional
 
 from . import db
@@ -33,6 +34,12 @@ from .config import (
     QINIU_URL_TTL,
 )
 from .security import new_id
+
+# 复用 HTTPS 连接，少一次 TLS 握手，对话/识别会快一截
+_DEEPSEEK_CLIENT = httpx.Client(
+    timeout=httpx.Timeout(45.0, connect=8.0),
+    limits=httpx.Limits(max_connections=8, max_keepalive_connections=4),
+)
 
 # ---------------------------------------------------------------- 热量索引
 
@@ -766,9 +773,7 @@ class DeepSeekAI(MockAI):
             return super().chat(message, context)
 
     def _call(self, messages, temperature=0.3, max_tokens=800):
-        import httpx
-
-        response = httpx.post(
+        response = _DEEPSEEK_CLIENT.post(
             f"{DEEPSEEK_BASE_URL}/chat/completions",
             headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}"},
             json={
@@ -778,7 +783,6 @@ class DeepSeekAI(MockAI):
                 "max_tokens": max_tokens,
                 "thinking": {"type": "disabled"},
             },
-            timeout=httpx.Timeout(45.0, connect=8.0),
         )
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]

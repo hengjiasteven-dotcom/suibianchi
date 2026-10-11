@@ -359,6 +359,7 @@ def app_version():
             "version_name": "",
             "notes": "",
             "force": False,
+            "update_mode": "silent",
             "download_url": "",
         }
 
@@ -368,6 +369,7 @@ def app_version():
         "version_name": info.get("version_name") or "",
         "notes": info.get("notes") or "",
         "force": bool(info.get("force")),
+        "update_mode": info.get("update_mode") or "full",
         "download_url": services.public_url(key) if key else "",
     }
 

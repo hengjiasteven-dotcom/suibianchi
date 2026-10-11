@@ -136,6 +136,9 @@ import com.shiji.app.data.SmsSendRequest
 import com.shiji.app.data.SmsVerifyRequest
 import com.shiji.app.data.StoreInfo
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -308,7 +311,10 @@ fun ShijiApp() {
     // 进 App 后查一次更新。这个接口不需要登录，所以登录页也能弹提示。
     LaunchedEffect(Unit) {
         runCatching { ApiClient.api.appVersion() }.onSuccess { info ->
-            if (info.version_code > BuildConfig.VERSION_CODE && info.download_url.isNotBlank()) {
+            if (info.version_code > BuildConfig.VERSION_CODE &&
+                info.download_url.isNotBlank() &&
+                info.update_mode != "silent"
+            ) {
                 pendingUpdate = info
             }
         }
@@ -382,10 +388,11 @@ fun ShijiApp() {
     /** 拉一次服务端发布的最新版本；比本机新就弹提示。 */
     fun checkUpdate() = run {
         val info = ApiClient.api.appVersion()
-        if (info.version_code > BuildConfig.VERSION_CODE && info.download_url.isNotBlank()) {
-            pendingUpdate = info
-        } else {
-            message = "已经是最新版本"
+        when {
+            info.version_code <= BuildConfig.VERSION_CODE -> message = "已经是最新版本"
+            info.update_mode == "silent" -> message = "服务端已更新，无需安装新版本"
+            info.download_url.isBlank() -> message = "更新信息不完整，稍后再试"
+            else -> pendingUpdate = info
         }
     }
 
@@ -1445,7 +1452,6 @@ fun RecordFeedScreen(
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Spacer(Modifier.weight(1f))
             TextButton(onClick = onGuide, enabled = !busy) { Text("怎么用", fontSize = 14.sp) }
-            TextButton(onClick = onRefresh, enabled = !busy) { Text("刷新", fontSize = 14.sp) }
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (meals.isEmpty()) {
@@ -1845,7 +1851,11 @@ fun RecordDialog(
         loading = true
         scope.launch {
             val loaded = withContext(Dispatchers.IO) {
-                uris.take(room).mapNotNull { loadImageBase64(context, it) }
+                coroutineScope {
+                    uris.take(room)
+                        .map { uri -> async { loadImageBase64(context, uri) } }
+                        .awaitAll()
+                }.mapNotNull { it }
                     .map { PickedPhoto(it.first, it.second) }
             }
             photos = photos + loaded
@@ -1992,11 +2002,11 @@ private fun slotLabel(slot: String) = when (slot) {
     else -> slot
 }
 
-/** 读取相册图片，最长边压到 1024 像素后转 base64，兼顾识别精度和上传速度。 */
+/** 读取相册图片，最长边压到 960 像素后转 base64，兼顾识别精度和上传速度。 */
 private fun loadImageBase64(
     context: android.content.Context,
     uri: android.net.Uri,
-    maxSide: Int = 1024
+    maxSide: Int = 960
 ): Pair<String, String>? {
     val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
     val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
@@ -2013,7 +2023,7 @@ private fun loadImageBase64(
         bitmap
     }
     val out = java.io.ByteArrayOutputStream()
-    scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 78, out)
+    scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 75, out)
     val name = uri.lastPathSegment?.substringAfterLast('/') ?: "photo.jpg"
     return Base64.encodeToString(out.toByteArray(), Base64.NO_WRAP) to name
 }
@@ -2029,10 +2039,7 @@ fun HistoryScreen(
 ) {
     val grouped = meals.groupBy { localDateKey(it.eaten_at) }
     Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onBackfill, enabled = !busy, modifier = Modifier.weight(1f)) { Text("补录一餐") }
-            OutlinedButton(onClick = onRefresh, enabled = !busy, modifier = Modifier.weight(1f)) { Text("刷新") }
-        }
+        Button(onClick = onBackfill, enabled = !busy, modifier = Modifier.fillMaxWidth()) { Text("补录一餐") }
         Spacer(Modifier.height(6.dp))
         Text("可补录今天、昨天、前天；记录只能编辑，不提供删除", fontSize = 14.sp, color = MaterialTheme.colorScheme.outline)
         Spacer(Modifier.height(8.dp))

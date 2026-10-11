@@ -37,6 +37,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--notes", default="", help="这次更新说明，会显示在客户端的更新弹窗里")
     parser.add_argument("--force", action="store_true", help="标记为强制更新")
+    parser.add_argument(
+        "--mode",
+        choices=["full", "silent"],
+        default="full",
+        help="full=提示安装；silent=仅服务端更新，不提示下载",
+    )
     parser.add_argument("--apk", default=str(APK), help="APK 路径，默认用 release 产物")
     args = parser.parse_args()
 
@@ -71,6 +77,7 @@ def main():
         "object_key": object_key,
         "notes": args.notes or f"更新到 {name}",
         "force": bool(args.force),
+        "update_mode": args.mode,
     }
     RELEASE_JSON.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"

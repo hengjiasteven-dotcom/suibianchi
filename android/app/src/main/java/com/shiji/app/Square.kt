@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.layout.ContentScale
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -37,7 +39,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -57,6 +62,8 @@ import com.shiji.app.data.FeedPost
 import com.shiji.app.data.FriendCard
 import com.shiji.app.data.FriendRequestItem
 import com.shiji.app.data.SharePayload
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** 广场里的三个位置：列表 / 朋友圈 / 和某个好友的分享窗口。 */
 sealed interface SquareRoute {
@@ -455,6 +462,14 @@ fun FriendChatScreen(
     onBack: () -> Unit,
     onShare: (String) -> Unit
 ) {
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(posts.size) {
+        if (posts.isNotEmpty()) {
+            delay(60)
+            listState.animateScrollToItem(posts.lastIndex)
+        }
+    }
     Column(Modifier.fillMaxSize()) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
@@ -480,11 +495,33 @@ fun FriendChatScreen(
                 )
             }
         } else {
-            LazyColumn(
-                Modifier.weight(1f).fillMaxWidth().padding(horizontal = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(posts, key = { it.post_id }) { post -> ChatBubble(post) }
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                LazyColumn(
+                    Modifier.fillMaxSize().padding(horizontal = 12.dp),
+                    state = listState,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(posts, key = { it.post_id }) { post -> ChatBubble(post) }
+                }
+                val atBottom by remember { derivedStateOf { !listState.canScrollForward } }
+                if (!atBottom) {
+                    IconButton(
+                        onClick = { scope.launch { listState.animateScrollToItem(posts.lastIndex) } },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(10.dp)
+                            .size(34.dp)
+                            .clip(CircleShape)
+                            .background(Color(0x73FFFFFF))
+                    ) {
+                        Icon(
+                            Icons.Filled.ArrowDownward,
+                            contentDescription = "回到最新",
+                            tint = Color(0xFF2A2114),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
             }
         }
 

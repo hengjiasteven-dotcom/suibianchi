@@ -119,7 +119,6 @@ fun CalendarScreen(
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.weight(1f)
             )
-            TextButton(onClick = onRefresh, enabled = !busy) { Text("刷新", fontSize = 14.sp) }
         }
         Spacer(Modifier.height(2.dp))
 

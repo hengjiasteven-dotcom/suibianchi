@@ -380,7 +380,8 @@ data class AppVersion(
     val version_name: String = "",
     val notes: String = "",
     val force: Boolean = false,
-    val download_url: String = ""
+    val download_url: String = "",
+    val update_mode: String = "full"
 )
 
 data class NearbyResponse(val stores: List<StoreInfo> = emptyList())
