@@ -3,6 +3,7 @@ package com.shiji.app
 import android.os.Bundle
 import android.content.Context
 import android.content.Intent
+import android.widget.Toast
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -226,6 +227,10 @@ fun ShijiApp() {
     var pendingItems by remember { mutableStateOf<List<RecognizedItem>>(emptyList()) }
     // 0 无 / 1 核对食材名称
     var recordStage by remember { mutableStateOf(0) }
+
+    fun toast(text: String) {
+        if (text.isNotBlank()) Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+    }
 
     fun run(block: suspend () -> Unit) {
         scope.launch {
@@ -869,6 +874,7 @@ fun ShijiApp() {
                         friends = friends,
                         requests = friendRequests,
                         busy = busy,
+                        message = message,
                         onOpenMoments = {
                             squareRoute = SquareRoute.Moments
                             loadMoments()
@@ -901,6 +907,7 @@ fun ShijiApp() {
                                         "pending" -> "已经申请过了，等对方同意"
                                         else -> result.message.ifBlank { "申请已发出" }
                                     }
+                                    toast(message)
                                 }.onFailure { e ->
                                     val raw = e.message ?: ""
                                     message = when {
@@ -908,6 +915,7 @@ fun ShijiApp() {
                                         raw.contains("400") -> "不能添加自己"
                                         else -> "加好友失败：${raw.ifBlank { "网络异常" }}"
                                     }
+                                    toast(message)
                                 }
                             }
                         },
@@ -947,6 +955,7 @@ fun ShijiApp() {
     userCard?.let { card ->
         UserCardDialog(
             card = card,
+            message = message,
             onAddFriend = { code ->
                 scope.launch {
                     runCatching {
@@ -959,6 +968,7 @@ fun ShijiApp() {
                             "pending" -> "已经申请过了，等对方同意"
                             else -> result.message.ifBlank { "申请已发出" }
                         }
+                        toast(message)
                     }.onFailure { e ->
                         val raw = e.message ?: ""
                         message = when {
@@ -966,6 +976,7 @@ fun ShijiApp() {
                             raw.contains("400") -> "不能添加自己"
                             else -> "加好友失败：${raw.ifBlank { "网络异常" }}"
                         }
+                        toast(message)
                     }
                 }
             },

@@ -221,6 +221,7 @@ fun SquareHomeScreen(
     friends: List<FriendCard>,
     requests: List<FriendRequestItem>,
     busy: Boolean,
+    message: String,
     onOpenMoments: () -> Unit,
     onOpenChat: (FriendCard) -> Unit,
     onAddFriend: (String) -> Unit,
@@ -274,6 +275,18 @@ fun SquareHomeScreen(
     }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
+        if (message.isNotBlank()) {
+            Text(
+                message,
+                fontSize = 15.sp,
+                color = if (message.contains("没有找到") || message.contains("失败")) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.primary
+                },
+                modifier = Modifier.padding(bottom = 10.dp)
+            )
+        }
         // 朋友圈入口
         Row(
             Modifier
@@ -572,6 +585,7 @@ private fun ChatBubble(post: FeedPost) {
 @Composable
 fun UserCardDialog(
     card: FriendCard,
+    message: String = "",
     onAddFriend: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -636,6 +650,18 @@ fun UserCardDialog(
                     fontSize = 14.sp,
                     color = MaterialTheme.colorScheme.outline
                 )
+                if (message.isNotBlank()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        message,
+                        fontSize = 14.sp,
+                        color = if (message.contains("没有找到") || message.contains("失败")) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        }
+                    )
+                }
             }
         },
         confirmButton = {
